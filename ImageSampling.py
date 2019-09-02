@@ -15,7 +15,7 @@ frameGap = 0
 pixelMargin = True
 digitFormat = 4 #Number of digits in the frame number identifier
 fileTypes = [".png", ".exr", ".hdr"]
-workDirectory = 'Capture1'
+workDirectory = 'D:/Bachelor_resources/Capture1'
 outputDirectory = 'samples2_' + workDirectory
 inputList = ['0FinalImage', '0SceneDepth', '1SceneDepth', '2SceneDepth', '0SceneColor']
 

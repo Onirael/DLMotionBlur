@@ -2,7 +2,7 @@ import os
 
 #------------------User input-------------------#
 
-workDirectory = "D:/BachelorCaptures/Capture1"
+workDirectory = "D:/Bachelor_resources/Capture1"
 askConfirm = True
 replace = "Test2"
 replaceWith = "Capture1"
