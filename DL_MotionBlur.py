@@ -16,7 +16,7 @@ randomSample = False
 trainModel = True
 displayData = False
 lossGraph = True
-modelFileName = "Model_2Depth_0.h5"
+modelFileName = "D:/Bachelor_resources/Model_2Depth_0.h5"
 
 #-------------------------Callback--------------------------#
 
@@ -48,7 +48,7 @@ def Pred_loss(image) :
 
 #-----------------------File handling-----------------------#
 
-workDirectory = 'D:/BachelorCaptures/samples2_Capture1'
+workDirectory = 'D:/Bachelor_resources/samples2_Capture1'
 inputDirectory = workDirectory + '/' + 'Input'
 outputDirectory = workDirectory + '/' + 'Output'
 filePrefix = 'Capture1'
