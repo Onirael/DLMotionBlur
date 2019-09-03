@@ -12,6 +12,7 @@ dataShape = 201
 digitFormat = 5
 debugSample = False
 sample = 110
+shuffleSeed = 42
 randomSample = False
 trainModel = True
 displayData = False
@@ -33,18 +34,20 @@ callback = accuracyCallback()
 def ApplyKernel(image, kernel) :
   return tf.einsum('hij,hijk->hk', kernel, image)
 
-def Pred_loss(image) :
-  global dataShape
-  with tf.compat.v1.Session() :
+def Pred_loss(image) :            # Loss functor, returns the Loss function
+  global dataShape                # Get the project's K value
+  with tf.compat.v1.Session() :   # Tensorflow session (for tensor manipulation)
 
-    def Loss(y_true, y_pred) :
+
+    def Loss(y_true, y_pred) :    # Nested function definition
       k_pred = tf.reshape(y_pred, [tf.shape(y_pred)[0], dataShape, dataShape])
       k_pred = ApplyKernel(image, k_pred)
+
 
       delta = tf.reduce_mean(tf.abs(y_true - k_pred), axis=1)
       return delta
 
-    return Loss
+    return Loss                   # Return the function object
 
 #-----------------------File handling-----------------------#
 
@@ -66,6 +69,7 @@ testSetSize = math.floor(setCount * 0.2)
 setDescription = np.zeros(trainingSetSize)
 setDescription = np.append(setDescription, np.repeat(1, crossValidSetSize))
 setDescription = np.append(setDescription, np.repeat(2, testSetSize))
+np.random.seed(shuffleSeed)
 np.random.shuffle(setDescription)
 
 #----------------------Image processing---------------------#
@@ -96,7 +100,7 @@ for fileNum in range(setCount) :
   if (fileNum%100 == 0) :
     stateString = "Importing image " + str(fileNum)
     print(stateString)
-  
+
   ident = setDescription[fileNum]
 
   #Import X and Y images
@@ -184,16 +188,28 @@ input2 = tf.keras.Input(shape=(dataShape, dataShape, 1), name='input_2') #Depth 
 #Input1
 y = tf.keras.layers.MaxPooling2D(2,2)(input1)
 y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
-y = tf.keras.layers.Dense(16, activation='relu')(y)
+y = tf.keras.layers.MaxPooling2D(2,2)(y)
+y = tf.keras.layers.Conv2D(8, (3,3), activation='relu')(y)
+y = tf.keras.layers.MaxPooling2D(2,2)(y)
+y = tf.keras.layers.Conv2D(4, (3,3), activation='relu')(y)
+y = tf.keras.layers.MaxPooling2D(2,2)(y)
+y = tf.keras.layers.Conv2D(2, (3,3), activation='relu')(y)
 y = tf.keras.layers.Flatten()(y)
+y = tf.keras.layers.Dense(dataShape, activation='relu')(y)
 y = tf.keras.layers.Dense(dataShape, activation='relu')(y)
 y = tf.keras.Model(inputs=input1, outputs=y)
 
 #Input2
 z = tf.keras.layers.MaxPooling2D(2,2)(input2)
 z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
-z = tf.keras.layers.Dense(16, activation='relu')(z)
+z = tf.keras.layers.MaxPooling2D(2,2)(z)
+z = tf.keras.layers.Conv2D(8, (3,3), activation='relu')(z)
+z = tf.keras.layers.MaxPooling2D(2,2)(z)
+z = tf.keras.layers.Conv2D(4, (3,3), activation='relu')(z)
+z = tf.keras.layers.MaxPooling2D(2,2)(z)
+z = tf.keras.layers.Conv2D(2, (3,3), activation='relu')(z)
 z = tf.keras.layers.Flatten()(z)
+z = tf.keras.layers.Dense(dataShape, activation='relu')(z)
 z = tf.keras.layers.Dense(dataShape, activation='relu')(z)
 z = tf.keras.Model(inputs=input2, outputs=z)
 
@@ -201,7 +217,7 @@ z = tf.keras.Model(inputs=input2, outputs=z)
 combined = tf.keras.layers.concatenate([y.output, z.output])
 
 #Common network
-n = tf.keras.layers.Dense(dataShape, activation='relu')(combined)
+n = tf.keras.layers.Dense(2 * dataShape, activation='relu')(combined)
 n = tf.keras.layers.Dense(dataShape**2, activation='linear')(n)
 
 #Model
@@ -223,7 +239,7 @@ if (trainModel) :
     [trainingSet_0SceneColor, trainingSet_0SceneDepth, trainingSet_1SceneDepth],
     trainingSet_0FinalImage,
     validation_data=([crossValidSet_0SceneColor, crossValidSet_0SceneDepth, crossValidSet_1SceneDepth], crossValidSet_0FinalImage),
-    epochs=20
+    epochs=40
   )
 
   # Get training and test loss histories
@@ -299,8 +315,8 @@ else :
 
     #-----------------------------------------------------------#
 
-testLoss = model.evaluate({'input_0':testSet_0SceneColor[np.newaxis, sample], 'input_1':testSet_0SceneDepth[np.newaxis, sample],
- 'input_2':testSet_1SceneDepth[np.newaxis, sample]}, testSet_0FinalImage[np.newaxis, sample])
+testLoss = model.evaluate({'input_0':testSet_0SceneColor, 'input_1':testSet_0SceneDepth,
+ 'input_2':testSet_1SceneDepth}, testSet_0FinalImage)
 
 testPredict = model.predict({'input_0':testSet_0SceneColor[np.newaxis, sample], 'input_1':testSet_0SceneDepth[np.newaxis, sample], 
   'input_2':testSet_1SceneDepth[np.newaxis, sample]})
