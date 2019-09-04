@@ -34,6 +34,38 @@ callback = accuracyCallback()
 def ApplyKernel(image, kernel) :
   return tf.einsum('hij,hijk->hk', kernel, image)
 
+def RGBtoXYZ(color):
+
+    comp = tf.where(color > 0.04045, tf.ones(tf.shape(color)), tf.zeros(tf.shape(color)))
+    newColor = comp * tf.math.pow((color + 0.055)/1.055, 2.4) + (1-comp) * color/12.92
+    newColor *= 100
+
+    convMat = tf.constant([
+        [0.4124564, 0.3575761, 0.1804375],
+        [0.2126729, 0.7151522, 0.0721750],
+        [0.0193339, 0.1191920, 0.9503041]
+        ])
+
+    XYZ = tf.einsum('kj,ij->ik', convMat, newColor) # Possible rounding of result
+
+    return XYZ
+
+def XYZtoLAB(XYZ):
+    newXYZ = XYZ / tf.constant([95.047, 100.0, 108.883])
+
+    comp = tf.where(newXYZ > 0.008856, tf.ones(tf.shape(newXYZ)), tf.zeros(tf.shape(newXYZ)))
+    newXYZ = comp * tf.math.pow(newXYZ, 1/3.0) + (1-comp) * (7.787 * newXYZ + 16/116.0)
+
+    convMat = tf.constant([
+        [0.0, 116.0, 0.0],
+        [500.0, -500.0, 0.0],
+        [0.0, 200.0, -200.0]
+    ])
+
+    Lab = tf.einsum('kj,ij->ik', convMat, newXYZ) + tf.constant([-16.0, 0.0, 0.0])
+
+    return Lab
+
 def Pred_loss(image) :            # Loss functor, returns the Loss function
   global dataShape                # Get the project's K value
   with tf.compat.v1.Session() :   # Tensorflow session (for tensor manipulation)
@@ -41,10 +73,11 @@ def Pred_loss(image) :            # Loss functor, returns the Loss function
     def Loss(y_true, y_pred) :    # Nested function definition
       k_pred = tf.reshape(y_pred, [tf.shape(y_pred)[0], dataShape, dataShape])
       k_pred = ApplyKernel(image, k_pred)
+      k_pred = XYZtoLAB(RGBtoXYZ(k_pred))
+      expected = XYZtoLAB(RGBtoXYZ(y_true))
 
-      
-      k_pred_YUV = 
-      delta = tf.reduce_mean(tf.abs(y_true - k_pred), axis=1)
+      delta = tf.norm(tf.abs(expected - k_pred), axis=1)
+
       return delta
 
     return Loss                   # Return the function object

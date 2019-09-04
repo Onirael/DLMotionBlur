@@ -3,27 +3,45 @@ import math
 
 np.random.seed(42)
 
-def RGBtoLCh(color):
-    alpha = 0.01 * np.amin(color)/np.amax(color)
-    y = 1
-    Q = math.exp(alpha * y)
-    L = (Q * np.amax(color) + (1-Q) * np.amin(color))/2.0
-    C = (Q * (np.abs(color[0]-color[1]) + np.abs(color[1]-color[2]) + np.abs(color[2]-color[0])))/3.0
-    H = math.atan2(color[1]-color[2], color[0]-color[1])
-
-    return np.array([L,C,H])
-
 
 def RGBtoXYZ(color):
+    comp = np.where(color > 0.04045, 1, 0)
+    newColor = comp * np.power((color + 0.055)/1.055, 2.4) + (1-comp) * color/12.92
+    newColor *= 100
+
     convMat = np.array([
-        [0.412453, 0.35758 , 0.180423],
-        [0.212671, 0.71516, 0.072169],
-        [0.019334, 0.119193,  0.950227]])
-    return np.matmul(convMat, color)
+        [0.4124564, 0.3575761, 0.1804375],
+        [0.2126729, 0.7151522, 0.0721750],
+        [0.0193339, 0.1191920, 0.9503041]
+        ])
+
+    XYZ = np.einsum('kj,ij->ik', convMat, newColor) # Possible rounding of result
+
+    return XYZ
+
+def XYZtoLAB(XYZ):
+    newXYZ = XYZ / np.array([95.047, 100.0, 108.883])
+
+    comp = np.where(newXYZ > 0.008856, 1, 0)
+    newXYZ = comp * np.power(newXYZ, 1/3.0) + (1-comp) * (7.787 * newXYZ + 16/116.0)
+
+    convMat = np.array([
+        [0, 116, 0],
+        [500, -500, 0],
+        [0, 200, -200]
+    ])
+
+    Lab = np.einsum('kj,ij->ik', convMat, newXYZ) + np.array([-16, 0, 0])
+
+    return Lab
     
 #--------------------------------------#
 
-arr = np.random.rand(20,3)
+arr = np.random.rand(3,3)
 
-print(arr[0])
-print(RGBtoXYZ(arr[0]) * 100)
+print("Values :")
+print(np.around(arr, 2))
+print("XYZ :")
+print(RGBtoXYZ(arr))
+print("Lab :")
+print(XYZtoLAB(RGBtoXYZ(arr)))
