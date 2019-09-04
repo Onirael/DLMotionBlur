@@ -14,7 +14,7 @@ debugSample = False
 sample = 110
 shuffleSeed = 42
 randomSample = False
-trainModel = True
+trainModel = False
 displayData = False
 lossGraph = True
 modelFileName = "D:/Bachelor_resources/Model_2Depth_0.h5"
@@ -38,12 +38,12 @@ def Pred_loss(image) :            # Loss functor, returns the Loss function
   global dataShape                # Get the project's K value
   with tf.compat.v1.Session() :   # Tensorflow session (for tensor manipulation)
 
-
     def Loss(y_true, y_pred) :    # Nested function definition
       k_pred = tf.reshape(y_pred, [tf.shape(y_pred)[0], dataShape, dataShape])
       k_pred = ApplyKernel(image, k_pred)
 
-
+      
+      k_pred_YUV = 
       delta = tf.reduce_mean(tf.abs(y_true - k_pred), axis=1)
       return delta
 
