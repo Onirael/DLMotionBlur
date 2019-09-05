@@ -8,6 +8,7 @@ import os, math, random, imageio
 import tensorflow.python.util.deprecation as deprecation
 deprecation._PRINT_DEPRECATION_WARNINGS = False
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+os.environ['TF_ENABLE_AUTO_MIXED_PRECISION'] = '1'
 
 dataShape = 201
 digitFormat = 5
@@ -20,6 +21,12 @@ saveWeights = False
 displayData = False
 lossGraph = True
 modelFileName = "D:/Bachelor_resources/Model_2Depth_0.h5"
+
+#------------------------TF session-------------------------#
+
+config = tf.compat.v1.ConfigProto()
+config.gpu_options.allow_growth = True
+session = tf.compat.v1.Session(config=config)
 
 #-------------------------Callback--------------------------#
 
@@ -38,13 +45,10 @@ def ApplyKernel(image, kernel) :
 
 def Pred_loss(image) :            # Loss functor, returns the Loss function
   global dataShape                # Get the project's K value
-  with tf.compat.v1.Session() :   # Tensorflow session (for tensor manipulation)
-
-
+  with session :   # Tensorflow session (for tensor manipulation)
     def Loss(y_true, y_pred) :    # Nested function definition
       k_pred = tf.reshape(y_pred, [tf.shape(y_pred)[0], dataShape, dataShape])
       k_pred = ApplyKernel(image, k_pred)
-
 
       delta = tf.reduce_mean(tf.abs(y_true - k_pred), axis=1)
       return delta
