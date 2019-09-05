@@ -37,11 +37,30 @@ def XYZtoLAB(XYZ):
     
 #--------------------------------------#
 
-arr = np.random.rand(3,3)
+#arr = np.random.rand(3,3)
+arr = np.array(
+[[0.43492913, 0.28644,    0.02103555],
+ [0.5158148,  0.26194036, 0.76836],
+ [0.4722246,  0.6793847, 0.9088831],
+ [0.5186044,  0.87784266, 0.22567332]]
+)
+arr_true = np.array(
+[[0.8709409, 0.27560663, 0.11408544],
+ [0.12394309, 0.9468801, 0.36348748],
+ [0.97442305, 0.78993106, 0.5581573],
+ [0.08199382, 0.9744395, 0.82567394]]
+)
 
 print("Values :")
-print(np.around(arr, 2))
+print(arr * 255)
+print(arr_true * 255)
 print("XYZ :")
 print(RGBtoXYZ(arr))
+print(RGBtoXYZ(arr_true))
 print("Lab :")
-print(XYZtoLAB(RGBtoXYZ(arr)))
+LabValue = XYZtoLAB(RGBtoXYZ(arr))
+LabTrue = XYZtoLAB(RGBtoXYZ(arr_true))
+print(LabValue)
+print(LabTrue)
+print("Delta :")
+print(np.linalg.norm(np.absolute(LabTrue - LabValue), axis=1))

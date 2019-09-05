@@ -3,10 +3,13 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.keras.optimizers import RMSprop
 from tensorflow.keras.models import load_model
+from time import perf_counter_ns
 import os, math, random, imageio
 import tensorflow.python.util.deprecation as deprecation
 deprecation._PRINT_DEPRECATION_WARNINGS = False
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+os.environ['TF_ENABLE_AUTO_MIXED_PRECISION'] = '1'
+
 
 dataShape = 201
 digitFormat = 5
@@ -14,10 +17,16 @@ debugSample = False
 sample = 110
 shuffleSeed = 42
 randomSample = False
-trainModel = False
+trainModel = True
+saveWeights = False
 displayData = False
 lossGraph = True
 modelFileName = "D:/Bachelor_resources/Model_2Depth_0.h5"
+
+#---------------------------Misc----------------------------#
+config = tf.compat.v1.ConfigProto()
+config.gpu_options.allow_growth = True
+session = tf.compat.v1.Session(config=config)
 
 #-------------------------Callback--------------------------#
 
@@ -68,15 +77,23 @@ def XYZtoLAB(XYZ):
 
 def Pred_loss(image) :            # Loss functor, returns the Loss function
   global dataShape                # Get the project's K value
-  with tf.compat.v1.Session() :   # Tensorflow session (for tensor manipulation)
+  with session :   # Tensorflow session (for tensor manipulation)
 
     def Loss(y_true, y_pred) :    # Nested function definition
       k_pred = tf.reshape(y_pred, [tf.shape(y_pred)[0], dataShape, dataShape])
-      k_pred = ApplyKernel(image, k_pred)
-      k_pred = XYZtoLAB(RGBtoXYZ(k_pred))
+      k_pred = ApplyKernel(image, k_pred)/255.0
+      comp = tf.where(tf.math.logical_or(k_pred > 1.0, k_pred < 0.0), tf.ones(tf.shape(k_pred)), tf.zeros(tf.shape(k_pred)))
+      comp2 = tf.reduce_max(comp, axis=1)
+    
       expected = XYZtoLAB(RGBtoXYZ(y_true))
 
-      delta = tf.norm(tf.abs(expected - k_pred), axis=1)
+      invColorLoss = tf.reduce_sum(comp * (tf.where(k_pred > 1, k_pred - 1, tf.zeros(tf.shape(k_pred))) + \
+        tf.where(k_pred < 0, -k_pred, tf.zeros(tf.shape(k_pred)))), axis=1) * 255.0 + 255.0 # The loss value for invalid colors (if RGB values are not in range 0 to 1)
+
+      colorLoss = tf.norm(tf.abs(expected - XYZtoLAB(RGBtoXYZ(k_pred))), axis=1) # The loss value for valid colors
+      colorLoss = tf.where(tf.math.is_nan(colorLoss), tf.zeros(tf.shape(colorLoss)), colorLoss)
+
+      delta = comp2 * invColorLoss + (1-comp2) * colorLoss
 
       return delta
 
@@ -144,7 +161,7 @@ for fileNum in range(setCount) :
   sceneColor0 = imageio.imread(inNameBase + '0SceneColor_' + frameString + '.png')[:,:,:3]/255.0
   sceneDepth0 = imageio.imread(inNameBase + '0SceneDepth_' + frameString + '.hdr')[:,:,:1]/65280.0
   sceneDepth1 = imageio.imread(inNameBase + '1SceneDepth_' + frameString + '.hdr')[:,:,:1]/65280.0
-  finalImage0 = imageio.imread(outNameBase + '0FinalImage_' + frameString + '.png')[0,0,:3]
+  finalImage0 = imageio.imread(outNameBase + '0FinalImage_' + frameString + '.png')[0,0,:3]/255.0
 
   if ident == 0 :
 
@@ -285,8 +302,9 @@ if (trainModel) :
   # model.save(modelFileName)
   # print("Saved model to disk")
 
-  model.save_weights(modelFileName)
-  print("Saved weights to file")
+  if saveWeights:
+    model.save_weights(modelFileName)
+    print("Saved weights to file")
 
   if (lossGraph) :
     #-----------------Visualize loss history--------------------#
@@ -358,4 +376,11 @@ testColor = np.einsum('hij,hijk->hk', np.reshape(testPredict, (1, dataShape, dat
 
 # Display sample results for debugging purpose
 print("Test color : ", testColor)
-print("Expected color : ", crossValidSet_0FinalImage[np.newaxis, sample])
+print("Expected color : ", crossValidSet_0FinalImage[np.newaxis, sample] * 255)
+
+start = perf_counter_ns()
+batchPredict = model.predict({'input_0':testSet_0SceneColor, 'input_1':testSet_0SceneDepth, 
+  'input_2':testSet_1SceneDepth})
+end = perf_counter_ns()
+
+print("Time per image: {:.2f}ms ".format((end-start)/len(testSet_0FinalImage)/1000000.0)) 
