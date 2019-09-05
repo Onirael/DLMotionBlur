@@ -90,6 +90,9 @@ with tf.compat.v1.Session() as sess:
     # print(k_pred.eval())
     # print(expected.eval())
 
+
+    print()
+
     # delta = tf.norm(tf.abs(expected - k_pred), axis=1)
 
     # print("Result :")

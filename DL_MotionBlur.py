@@ -6,6 +6,7 @@ from tensorflow.keras.models import load_model
 from time import perf_counter_ns
 import os, math, random, imageio
 import tensorflow.python.util.deprecation as deprecation
+from skimage.color import rgb2lab
 deprecation._PRINT_DEPRECATION_WARNINGS = False
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 os.environ['TF_ENABLE_AUTO_MIXED_PRECISION'] = '1'
@@ -43,57 +44,17 @@ callback = accuracyCallback()
 def ApplyKernel(image, kernel) :
   return tf.einsum('hij,hijk->hk', kernel, image)
 
-def RGBtoXYZ(color):
-
-    comp = tf.where(color > 0.04045, tf.ones(tf.shape(color)), tf.zeros(tf.shape(color)))
-    newColor = comp * tf.math.pow((color + 0.055)/1.055, 2.4) + (1-comp) * color/12.92
-    newColor *= 100
-
-    convMat = tf.constant([
-        [0.4124564, 0.3575761, 0.1804375],
-        [0.2126729, 0.7151522, 0.0721750],
-        [0.0193339, 0.1191920, 0.9503041]
-        ])
-
-    XYZ = tf.einsum('kj,ij->ik', convMat, newColor) # Possible rounding of result
-
-    return XYZ
-
-def XYZtoLAB(XYZ):
-    newXYZ = XYZ / tf.constant([95.047, 100.0, 108.883])
-
-    comp = tf.where(newXYZ > 0.008856, tf.ones(tf.shape(newXYZ)), tf.zeros(tf.shape(newXYZ)))
-    newXYZ = comp * tf.math.pow(newXYZ, 1/3.0) + (1-comp) * (7.787 * newXYZ + 16/116.0)
-
-    convMat = tf.constant([
-        [0.0, 116.0, 0.0],
-        [500.0, -500.0, 0.0],
-        [0.0, 200.0, -200.0]
-    ])
-
-    Lab = tf.einsum('kj,ij->ik', convMat, newXYZ) + tf.constant([-16.0, 0.0, 0.0])
-
-    return Lab
-
 def Pred_loss(image) :            # Loss functor, returns the Loss function
   global dataShape                # Get the project's K value
-  with session :   # Tensorflow session (for tensor manipulation)
-
+  with session:   # Tensorflow session (for tensor manipulation)
     def Loss(y_true, y_pred) :    # Nested function definition
       k_pred = tf.reshape(y_pred, [tf.shape(y_pred)[0], dataShape, dataShape])
-      k_pred = ApplyKernel(image, k_pred)/255.0
-      comp = tf.where(tf.math.logical_or(k_pred > 1.0, k_pred < 0.0), tf.ones(tf.shape(k_pred)), tf.zeros(tf.shape(k_pred)))
-      comp2 = tf.reduce_max(comp, axis=1)
+      k_pred = ApplyKernel(image, k_pred)
+
+      #y_true = tf.image.rgb_to_hsv(y_true)
+      #k_pred = tf.image.rgb_to_hsv(k_pred)
     
-      expected = XYZtoLAB(RGBtoXYZ(y_true))
-
-      invColorLoss = tf.reduce_sum(comp * (tf.where(k_pred > 1, k_pred - 1, tf.zeros(tf.shape(k_pred))) + \
-        tf.where(k_pred < 0, -k_pred, tf.zeros(tf.shape(k_pred)))), axis=1) * 255.0 + 255.0 # The loss value for invalid colors (if RGB values are not in range 0 to 1)
-
-      colorLoss = tf.norm(tf.abs(expected - XYZtoLAB(RGBtoXYZ(k_pred))), axis=1) # The loss value for valid colors
-      colorLoss = tf.where(tf.math.is_nan(colorLoss), tf.zeros(tf.shape(colorLoss)), colorLoss)
-
-      delta = comp2 * invColorLoss + (1-comp2) * colorLoss
+      delta = tf.norm(tf.abs(y_true - k_pred), axis=1)
 
       return delta
 
