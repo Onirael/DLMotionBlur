@@ -22,8 +22,8 @@ modelFromFile = False
 displayData = False
 lossGraph = True
 resourcesFolder = "D:/Bachelor_resources/"
-weightsFileName = resourcesFolder + "Model_2Depth_0.h5"
-modelFileName = resourcesFolder + "Model_2Depth_0.json"
+weightsFileName = resourcesFolder + "2Depth_0_Weights.h5"
+modelFileName = resourcesFolder + "2Depth_0_Model.h5"
 
 
 #------------------------TF session-------------------------#
@@ -44,20 +44,16 @@ callback = accuracyCallback()
 
 #-------------------------Functions-------------------------#
 
-def ApplyKernel(image, kernel) :
+def ApplyKernel(image, flatKernel) :
+  global dataShape
+  kernel = tf.reshape(flatKernel, [tf.shape(flatKernel)[0], dataShape, dataShape])
+
   return tf.einsum('hij,hijk->hk', kernel, image)
 
-def Pred_loss(image) :            # Loss functor, returns the Loss function
-  global dataShape                # Get the project's K value
-  with session :   # Tensorflow session (for tensor manipulation)
-    def Loss(y_true, y_pred) :    # Nested function definition
-      k_pred = tf.reshape(y_pred, [tf.shape(y_pred)[0], dataShape, dataShape])
-      k_pred = ApplyKernel(image, k_pred)
 
-      delta = tf.reduce_mean(tf.abs(y_true - k_pred), axis=1)
-      return delta
-
-    return Loss                   # Return the function object
+def Loss(y_true, y_pred) :    # Nested function definition
+  delta = tf.reduce_mean(tf.abs(y_true - y_pred), axis=1)
+  return delta
 
 #-----------------------File handling-----------------------#
 
@@ -185,9 +181,10 @@ if (debugSample) :
 #---------------------TensorFlow model----------------------#
 
 if (modelFromFile) :
-  with open(modelFileName, 'r') as modelFile :
-    json_string = modelFile.read()
-    model = keras.models.model_from_json(json_string)
+  #with open(modelFileName, 'r') as modelFile :
+  #  json_string = modelFile.read()
+  #  model = keras.models.model_from_json(json_string)
+  model = tf.keras.models.load_model(modelFileName)
 else :
   input0 = tf.keras.Input(shape=(dataShape, dataShape, 3), name='input_0') #Scene color
   input1 = tf.keras.Input(shape=(dataShape, dataShape, 1), name='input_1') #Depth 0
@@ -232,13 +229,14 @@ else :
   #Common network
   n = tf.keras.layers.Dense(64, activation='relu')(combined)
   n = tf.keras.layers.Dense(dataShape**2, activation='linear')(n)
+  n = tf.keras.layers.Lambda(lambda x: ApplyKernel(input0, x))(n)
 
   #Model
   model = tf.keras.Model(inputs=[input0, y.input, z.input], outputs=n)
 
   #--------------------------------#
 
-model.compile(loss=Pred_loss(input0), 
+model.compile(loss=Loss, 
   optimizer=RMSprop(lr=0.001))
 
 # Save layer names for plotting
@@ -265,10 +263,7 @@ if (trainModel) :
     model.save_weights(weightsFileName)
     print("Saved weights to file")
 
-    json_string = model.to_json()
-    with open(modelFileName, 'w+') as modelFile:
-      modelFile.write(json_string)
-      modelFile.close()
+    model.save(modelFileName)
     print("Saved model to file")
 
   if (lossGraph) :
