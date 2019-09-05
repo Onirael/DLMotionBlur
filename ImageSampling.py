@@ -2,23 +2,22 @@ import numpy as np
 from matplotlib import pyplot as plt
 from skimage import data, io
 import cv2 as cv
-import imageio, math, random, os
+import imageio, math, random, png, os
 
 #-----------------------------User Input--------------------------------------#
 
 sSize = 100
 samples = 100
-frameAmount = 999
+frameAmount = 454
 frameOffset = 2
-startFrame = 226 #Number of first frame to compute
+startFrame = 444 #Number of first frame to compute
 frameGap = 0
 pixelMargin = True
 digitFormat = 4 #Number of digits in the frame number identifier
 fileTypes = [".png", ".exr", ".hdr"]
-workDirectory = 'D:/Bachelor_resources/'
-inputFolder = 'Capture1'
-outputDirectory = workDirectory + '/' + 'samples3_' + inputFolder
-inputList = ['0FinalImage', '0SceneDepth', '1SceneDepth', '0SceneColor']
+workDirectory = 'D:/Bachelor_resources/Capture1'
+outputDirectory = 'samples2_' + workDirectory
+inputList = ['0FinalImage', '0SceneDepth', '1SceneDepth', '2SceneDepth', '0SceneColor']
 
 #-----------------------------------------------------------------------------#
 
@@ -50,7 +49,8 @@ def colorImage(image, samplePixel, sampleSize) :
 
 #-----------------------------------------------------------------------------#
 
-testImage = io.imread(workDirectory + inputFolder + '/' + os.listdir(workDirectory + inputFolder)[0])
+#testImage = baseImage = io.imread(workDirectory + '/' + workDirectory + '_' + inputList[0][1:] + '_' + (digitFormat * '0') + fileTypes[0])
+testImage = io.imread(workDirectory + '/' + os.listdir(workDirectory)[0])
 iterations = int((1.0 * frameAmount)/(frameGap + 1) - startFrame)
 exportDigitFormat = math.floor(math.log(samples * frameAmount, 10)) + 1
 subFolder = ''
@@ -90,7 +90,7 @@ for iteration in range(startFrame, iterations + startFrame) :
         if (len(frameString) < digitFormat) :
             frameString = (digitFormat - len(frameString)) * "0" + frameString
         
-        filename = inputFolder + '_' + inputType + '_' + frameString + fileType
+        filename = workDirectory + '_' + inputType + '_' + frameString + fileType
 
         valid = False
         for extension in fileTypes :
@@ -101,11 +101,11 @@ for iteration in range(startFrame, iterations + startFrame) :
             continue
 
         if fileType == '.exr' :
-            baseImage = cv.imread(workDirectory + inputFolder + '/' + filename, cv.IMREAD_ANYDEPTH)
+            baseImage = cv.imread(workDirectory + '/' + filename, cv.IMREAD_ANYDEPTH)
         elif fileType == '.png' :
-            baseImage = io.imread(workDirectory + inputFolder + '/' + filename)
+            baseImage = io.imread(workDirectory + '/' + filename)
         elif fileType == '.hdr' :
-            baseImage = imageio.imread(workDirectory + inputFolder + '/' + filename)
+            baseImage = imageio.imread(workDirectory + '/' + filename)
         
         if inputType != 'FinalImage' and pixelMargin : #Add pixel margin
             marginImage = np.zeros((baseImage.shape[0] + 2 * sSize, baseImage.shape[1] + 2 * sSize, baseImage.shape[2]))
@@ -135,7 +135,7 @@ for iteration in range(startFrame, iterations + startFrame) :
             if inputType == 'FinalImage' :
                 subFolder = 'Output'
 
-            fileOutName = outputDirectory + '/' + subFolder + '/' + inputFolder + '_' + input + '_' + outputID + fileType
+            fileOutName = outputDirectory + '/' + subFolder + '/' + workDirectory + '_' + input + '_' + outputID + fileType
             print("Writing sample to file", fileOutName)
 
             if fileType in ['.exr', '.hdr'] :
