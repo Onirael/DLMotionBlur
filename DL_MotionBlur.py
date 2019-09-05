@@ -17,10 +17,14 @@ sample = 110
 shuffleSeed = 42
 randomSample = False
 trainModel = True
-saveWeights = False
+saveFiles = True
+modelFromFile = False
 displayData = False
 lossGraph = True
-modelFileName = "D:/Bachelor_resources/Model_2Depth_0.h5"
+resourcesFolder = "D:/Bachelor_resources/"
+weightsFileName = resourcesFolder + "Model_2Depth_0.h5"
+modelFileName = resourcesFolder + "Model_2Depth_0.json"
+
 
 #------------------------TF session-------------------------#
 
@@ -180,56 +184,59 @@ if (debugSample) :
 
 #---------------------TensorFlow model----------------------#
 
-input0 = tf.keras.Input(shape=(dataShape, dataShape, 3), name='input_0') #Scene color
-input1 = tf.keras.Input(shape=(dataShape, dataShape, 1), name='input_1') #Depth 0
-input2 = tf.keras.Input(shape=(dataShape, dataShape, 1), name='input_2') #Depth -1
+if (modelFromFile) :
+  with open(modelFileName, 'r') as modelFile :
+    json_string = modelFile.read()
+    model = keras.models.model_from_json(json_string)
+else :
+  input0 = tf.keras.Input(shape=(dataShape, dataShape, 3), name='input_0') #Scene color
+  input1 = tf.keras.Input(shape=(dataShape, dataShape, 1), name='input_1') #Depth 0
+  input2 = tf.keras.Input(shape=(dataShape, dataShape, 1), name='input_2') #Depth -1
 
-#-Definition---------------------#
+  #-Definition---------------------#
 
-# #Input0
-# x = tf.keras.layers.Dense(16, activation='relu')(input0)
-# x = tf.keras.layers.Flatten()(x)
-# x = tf.keras.Model(inputs=input0, outputs=x)
+  # #Input0
+  # x = tf.keras.layers.Dense(16, activation='relu')(input0)
+  # x = tf.keras.layers.Flatten()(x)
+  # x = tf.keras.Model(inputs=input0, outputs=x)
 
-#Input1
-y = tf.keras.layers.MaxPooling2D(2,2)(input1)
-y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
-y = tf.keras.layers.MaxPooling2D(2,2)(y)
-y = tf.keras.layers.Conv2D(8, (3,3), activation='relu')(y)
-y = tf.keras.layers.MaxPooling2D(2,2)(y)
-y = tf.keras.layers.Conv2D(4, (3,3), activation='relu')(y)
-y = tf.keras.layers.MaxPooling2D(2,2)(y)
-y = tf.keras.layers.Conv2D(2, (3,3), activation='relu')(y)
-y = tf.keras.layers.Flatten()(y)
-y = tf.keras.layers.Dense(dataShape, activation='relu')(y)
-y = tf.keras.layers.Dense(dataShape, activation='relu')(y)
-y = tf.keras.Model(inputs=input1, outputs=y)
+  #Input1
+  y = tf.keras.layers.MaxPooling2D(2,2)(input1)
+  y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
+  y = tf.keras.layers.MaxPooling2D(4,4)(y)
+  y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
+  y = tf.keras.layers.MaxPooling2D(2,2)(y)
+  y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
+  # y = tf.keras.layers.MaxPooling2D(2,2)(y)
+  # y = tf.keras.layers.Conv2D(2, (3,3), activation='relu')(y)
+  y = tf.keras.layers.Flatten()(y)
+  y = tf.keras.layers.Dense(dataShape, activation='relu')(y)
+  y = tf.keras.Model(inputs=input1, outputs=y)
 
-#Input2
-z = tf.keras.layers.MaxPooling2D(2,2)(input2)
-z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
-z = tf.keras.layers.MaxPooling2D(2,2)(z)
-z = tf.keras.layers.Conv2D(8, (3,3), activation='relu')(z)
-z = tf.keras.layers.MaxPooling2D(2,2)(z)
-z = tf.keras.layers.Conv2D(4, (3,3), activation='relu')(z)
-z = tf.keras.layers.MaxPooling2D(2,2)(z)
-z = tf.keras.layers.Conv2D(2, (3,3), activation='relu')(z)
-z = tf.keras.layers.Flatten()(z)
-z = tf.keras.layers.Dense(dataShape, activation='relu')(z)
-z = tf.keras.layers.Dense(dataShape, activation='relu')(z)
-z = tf.keras.Model(inputs=input2, outputs=z)
+  #Input2
+  z = tf.keras.layers.MaxPooling2D(2,2)(input2)
+  z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
+  z = tf.keras.layers.MaxPooling2D(4,4)(z)
+  z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
+  z = tf.keras.layers.MaxPooling2D(2,2)(z)
+  z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
+  # z = tf.keras.layers.MaxPooling2D(2,2)(z)
+  # z = tf.keras.layers.Conv2D(2, (3,3), activation='relu')(z)
+  z = tf.keras.layers.Flatten()(z)
+  z = tf.keras.layers.Dense(dataShape, activation='relu')(z)
+  z = tf.keras.Model(inputs=input2, outputs=z)
 
-#Combine inputs
-combined = tf.keras.layers.concatenate([y.output, z.output])
+  #Combine inputs
+  combined = tf.keras.layers.concatenate([y.output, z.output])
 
-#Common network
-n = tf.keras.layers.Dense(2 * dataShape, activation='relu')(combined)
-n = tf.keras.layers.Dense(dataShape**2, activation='linear')(n)
+  #Common network
+  n = tf.keras.layers.Dense(64, activation='relu')(combined)
+  n = tf.keras.layers.Dense(dataShape**2, activation='linear')(n)
 
-#Model
-model = tf.keras.Model(inputs=[input0, y.input, z.input], outputs=n)
+  #Model
+  model = tf.keras.Model(inputs=[input0, y.input, z.input], outputs=n)
 
-#--------------------------------#
+  #--------------------------------#
 
 model.compile(loss=Pred_loss(input0), 
   optimizer=RMSprop(lr=0.001))
@@ -245,7 +252,7 @@ if (trainModel) :
     [trainingSet_0SceneColor, trainingSet_0SceneDepth, trainingSet_1SceneDepth],
     trainingSet_0FinalImage,
     validation_data=([crossValidSet_0SceneColor, crossValidSet_0SceneDepth, crossValidSet_1SceneDepth], crossValidSet_0FinalImage),
-    epochs=200
+    epochs=40
   )
 
   # Get training and test loss histories
@@ -254,13 +261,15 @@ if (trainModel) :
 
   epoch_count = range(1, len(training_loss) + 1) # Create count of the number of epochs
 
-  # # Save model and architecture to single file
-  # model.save(modelFileName)
-  # print("Saved model to disk")
-
-  if saveWeights :
-    model.save_weights(modelFileName)
+  if saveFiles :
+    model.save_weights(weightsFileName)
     print("Saved weights to file")
+
+    json_string = model.to_json()
+    with open(modelFileName, 'w+') as modelFile:
+      modelFile.write(json_string)
+      modelFile.close()
+    print("Saved model to file")
 
   if (lossGraph) :
     #-----------------Visualize loss history--------------------#
@@ -277,11 +286,11 @@ if (trainModel) :
 else :
   # # Load model
   # input0 = tf.keras.Input(shape=(dataShape, dataShape, 3)) #Scene color
-  # model = load_model(modelFileName, custom_objects={'Loss':Pred_loss(input0)})
+  # model = load_model(weightsFileName, custom_objects={'Loss':Pred_loss(input0)})
   # print("Model inputs: ", model.inputs)
   # print("Model outputs: ", model.outputs)
 
-  model.load_weights(modelFileName)
+  model.load_weights(weightsFileName)
   print("\nWeights loaded from file\n")
   model.summary()
 
