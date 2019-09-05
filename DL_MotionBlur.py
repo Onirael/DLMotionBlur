@@ -18,7 +18,7 @@ shuffleSeed = 42
 randomSample = False
 trainModel = True
 saveFiles = True
-modelFromFile = False
+modelFromFile = True
 displayData = False
 lossGraph = True
 resourcesFolder = "D:/Bachelor_resources/"
@@ -180,61 +180,55 @@ if (debugSample) :
 
 #---------------------TensorFlow model----------------------#
 
-if (modelFromFile) :
-  #with open(modelFileName, 'r') as modelFile :
-  #  json_string = modelFile.read()
-  #  model = keras.models.model_from_json(json_string)
-  model = tf.keras.models.load_model(modelFileName)
-else :
-  input0 = tf.keras.Input(shape=(dataShape, dataShape, 3), name='input_0') #Scene color
-  input1 = tf.keras.Input(shape=(dataShape, dataShape, 1), name='input_1') #Depth 0
-  input2 = tf.keras.Input(shape=(dataShape, dataShape, 1), name='input_2') #Depth -1
+input0 = tf.keras.Input(shape=(dataShape, dataShape, 3), name='input_0') #Scene color
+input1 = tf.keras.Input(shape=(dataShape, dataShape, 1), name='input_1') #Depth 0
+input2 = tf.keras.Input(shape=(dataShape, dataShape, 1), name='input_2') #Depth -1
 
-  #-Definition---------------------#
+#-Definition---------------------#
 
-  # #Input0
-  # x = tf.keras.layers.Dense(16, activation='relu')(input0)
-  # x = tf.keras.layers.Flatten()(x)
-  # x = tf.keras.Model(inputs=input0, outputs=x)
+# #Input0
+# x = tf.keras.layers.Dense(16, activation='relu')(input0)
+# x = tf.keras.layers.Flatten()(x)
+# x = tf.keras.Model(inputs=input0, outputs=x)
 
-  #Input1
-  y = tf.keras.layers.MaxPooling2D(2,2)(input1)
-  y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
-  y = tf.keras.layers.MaxPooling2D(4,4)(y)
-  y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
-  y = tf.keras.layers.MaxPooling2D(2,2)(y)
-  y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
-  # y = tf.keras.layers.MaxPooling2D(2,2)(y)
-  # y = tf.keras.layers.Conv2D(2, (3,3), activation='relu')(y)
-  y = tf.keras.layers.Flatten()(y)
-  y = tf.keras.layers.Dense(dataShape, activation='relu')(y)
-  y = tf.keras.Model(inputs=input1, outputs=y)
+#Input1
+y = tf.keras.layers.MaxPooling2D(2,2)(input1)
+y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
+y = tf.keras.layers.MaxPooling2D(4,4)(y)
+y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
+y = tf.keras.layers.MaxPooling2D(2,2)(y)
+y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
+# y = tf.keras.layers.MaxPooling2D(2,2)(y)
+# y = tf.keras.layers.Conv2D(2, (3,3), activation='relu')(y)
+y = tf.keras.layers.Flatten()(y)
+y = tf.keras.layers.Dense(dataShape, activation='relu')(y)
+y = tf.keras.Model(inputs=input1, outputs=y)
 
-  #Input2
-  z = tf.keras.layers.MaxPooling2D(2,2)(input2)
-  z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
-  z = tf.keras.layers.MaxPooling2D(4,4)(z)
-  z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
-  z = tf.keras.layers.MaxPooling2D(2,2)(z)
-  z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
-  # z = tf.keras.layers.MaxPooling2D(2,2)(z)
-  # z = tf.keras.layers.Conv2D(2, (3,3), activation='relu')(z)
-  z = tf.keras.layers.Flatten()(z)
-  z = tf.keras.layers.Dense(dataShape, activation='relu')(z)
-  z = tf.keras.Model(inputs=input2, outputs=z)
+#Input2
+z = tf.keras.layers.MaxPooling2D(2,2)(input2)
+z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
+z = tf.keras.layers.MaxPooling2D(4,4)(z)
+z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
+z = tf.keras.layers.MaxPooling2D(2,2)(z)
+z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
+# z = tf.keras.layers.MaxPooling2D(2,2)(z)
+# z = tf.keras.layers.Conv2D(2, (3,3), activation='relu')(z)
+z = tf.keras.layers.Flatten()(z)
+z = tf.keras.layers.Dense(dataShape, activation='relu')(z)
+z = tf.keras.Model(inputs=input2, outputs=z)
 
-  #Combine inputs
-  combined = tf.keras.layers.concatenate([y.output, z.output])
+#Combine inputs
+combined = tf.keras.layers.concatenate([y.output, z.output])
 
-  #Common network
-  n = tf.keras.layers.Dense(64, activation='relu')(combined)
-  n = tf.keras.layers.Dense(dataShape**2, activation='linear')(n)
-  n = tf.keras.layers.Lambda(lambda x: ApplyKernel(input0, x))(n)
+#Common network
+n = tf.keras.layers.Dense(64, activation='relu')(combined)
+n = tf.keras.layers.Dense(dataShape**2, activation='linear')(n)
+n = tf.keras.layers.Lambda(lambda x: ApplyKernel(input0, x))(n)
 
-  #Model
-  model = tf.keras.Model(inputs=[input0, y.input, z.input], outputs=n)
+#Model
+model = tf.keras.Model(inputs=[input0, y.input, z.input], outputs=n)
 
-  #--------------------------------#
+#--------------------------------#
 
 model.compile(loss=Loss, 
   optimizer=RMSprop(lr=0.001))
@@ -263,8 +257,8 @@ if (trainModel) :
     model.save_weights(weightsFileName)
     print("Saved weights to file")
 
-    model.save(modelFileName)
-    print("Saved model to file")
+    # model.save(modelFileName)
+    # print("Saved model to file")
 
   if (lossGraph) :
     #-----------------Visualize loss history--------------------#
@@ -277,17 +271,6 @@ if (trainModel) :
     plt.ylabel('Loss')
     plt.ylim(0, 70)
     plt.show()
-
-else :
-  # # Load model
-  # input0 = tf.keras.Input(shape=(dataShape, dataShape, 3)) #Scene color
-  # model = load_model(weightsFileName, custom_objects={'Loss':Pred_loss(input0)})
-  # print("Model inputs: ", model.inputs)
-  # print("Model outputs: ", model.outputs)
-
-  model.load_weights(weightsFileName)
-  print("\nWeights loaded from file\n")
-  model.summary()
 
 #--------------------------------------------------------------#
 
@@ -332,10 +315,8 @@ testLoss = model.evaluate({'input_0':testSet_0SceneColor, 'input_1':testSet_0Sce
 testPredict = model.predict({'input_0':testSet_0SceneColor[np.newaxis, sample], 'input_1':testSet_0SceneDepth[np.newaxis, sample], 
   'input_2':testSet_1SceneDepth[np.newaxis, sample]})
 
-testColor = np.einsum('hij,hijk->hk', np.reshape(testPredict, (1, dataShape, dataShape)), crossValidSet_0SceneColor[np.newaxis, sample])
-
 # Display sample results for debugging purpose
-print("Test color : ", testColor)
+print("Test color : ", testPredict)
 print("Expected color : ", crossValidSet_0FinalImage[np.newaxis, sample])
 
 start = perf_counter_ns()
