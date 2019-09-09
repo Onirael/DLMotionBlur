@@ -92,10 +92,10 @@ def FillNameSet(indexArray, SceneColorArr, SceneDepth0Arr, SceneDepth1Arr, Final
     if (len(preFrameString) < digitFormat) :
       preFrameString = (digitFormat - len(preFrameString)) * "0" + preFrameString
 
-    sceneColor = imageio.imread(workDirectory + 'SceneColor/' + filePrefix + '_' + 'SceneColor' + '_' + frameString + '.png')[:,:,3]/255.0
-    sceneDepth0 = imageio.imread(workDirectory + 'SceneDepth/' + filePrefix + '_' + 'SceneDepth' + '_' + frameString + '.hdr')[:,:,1]/65280.0
-    sceneDepth1 = imageio.imread(workDirectory + 'SceneDepth/' + filePrefix + '_' + 'SceneDepth' + '_' + preFrameString + '.hdr')[:,:,1]/65280.0
-    finalImage = imageio.imread(workDirectory + 'SceneDepth/' + filePrefix + '_' + 'FinalImage' + '_' + preFrameString + '.png')[:,:,3]
+    sceneColor = workDirectory + 'SceneColor/' + filePrefix + '_' + 'SceneColor' + '_' + frameString + '.png'
+    sceneDepth0 = workDirectory + 'SceneDepth/' + filePrefix + '_' + 'SceneDepth' + '_' + frameString + '.hdr'
+    sceneDepth1 = workDirectory + 'SceneDepth/' + filePrefix + '_' + 'SceneDepth' + '_' + preFrameString + '.hdr'
+    finalImage = workDirectory + 'SceneDepth/' + filePrefix + '_' + 'FinalImage' + '_' + preFrameString + '.png'
 
     SceneColorArr.append(sceneColor)
     SceneDepth0Arr.append(sceneDepth0)
@@ -124,87 +124,29 @@ train_SceneDepth0 = []
 train_SceneDepth1 = []
 train_FinalImage = []
 
-for index in trainSet :
-  frameString = str(index) 
-  if (len(frameString) < digitFormat) :
-    frameString = (digitFormat - len(frameString)) * "0" + frameString
+crossValid_SceneColor = []
+crossValid_SceneDepth0 = []
+crossValid_SceneDepth1 = []
+crossValid_FinalImage = []
 
-  train_SceneColor.append(workDirectory + 'SceneColor/' + filePrefix + '_' + 'SceneColor' + '_' + frameString + '.png')
+test_SceneColor = []
+test_SceneDepth0 = []
+test_SceneDepth1 = []
+test_FinalImage = []
 
-
+FillNameSet(trainSet, train_SceneColor, train_SceneDepth0, train_SceneDepth1, train_FinalImage)
+FillNameSet(crossValidSet, crossValid_SceneColor, crossValid_SceneDepth0, crossValid_SceneDepth1, crossValid_FinalImage)
+FillNameSet(testSet, test_SceneColor, test_SceneDepth0, test_SceneDepth1, test_FinalImage)
 
 #----------------------Image processing---------------------#
 
-#Training set
-trainingSet_0SceneColor = np.zeros((trainingSetSize, frameSizeX, frameSizeY, 3))
-trainingSet_0SceneDepth = np.zeros((trainingSetSize, frameSizeX, frameSizeY, 1))
-trainingSet_1SceneDepth = np.zeros((trainingSetSize, frameSizeX, frameSizeY, 1))
-trainingSet_0FinalImage = np.zeros((trainingSetSize, frameSizeX, frameSizeY, 3))
+genColor = ImageDataGenerator(rescale = 1./255)
 
-#Cross validation set
-crossValidSet_0SceneColor = np.zeros((crossValidSetSize, frameSizeX, frameSizeY, 3))
-crossValidSet_0SceneDepth = np.zeros((crossValidSetSize, frameSizeX, frameSizeY, 1))
-crossValidSet_1SceneDepth = np.zeros((crossValidSetSize, frameSizeX, frameSizeY, 1))
-crossValidSet_0FinalImage = np.zeros((crossValidSetSize, frameSizeX, frameSizeY, 3))
+def GetTrainGenerator(generator, )
 
-#Test set
-testSet_0SceneColor = np.zeros((testSetSize, frameSizeX, frameSizeY, 3))
-testSet_0SceneDepth = np.zeros((testSetSize, frameSizeX, frameSizeY, 1))
-testSet_1SceneDepth = np.zeros((testSetSize, frameSizeX, frameSizeY, 1))
-testSet_0FinalImage = np.zeros((testSetSize, frameSizeX, frameSizeY, 3))
-
-#Add input sets
-
-(trainCount, crossValidCount, testCount) = (0,0,0)
-
-for fileNum in range(startFrame, endFrame) :
-  exampleNum = fileNum - startFrame
-  if (exampleNum%100 == 0) :
-    stateString = "Importing image " + str(exampleNum)
-    print(stateString)
-
-  ident = setDescription[exampleNUm]
-
-  #Import X and Y images
-  frameString = str(fileNum) 
-  if (len(frameString) < digitFormat) :
-    frameString = (digitFormat - len(frameString)) * "0" + frameString
-
-  sceneColor0 = imageio.imread(inNameBase + '0SceneColor_' + frameString + '.png')[:,:,:3]/255.0
-  sceneDepth0 = imageio.imread(inNameBase + '0SceneDepth_' + frameString + '.hdr')[:,:,:1]/65280.0
-  sceneDepth1 = imageio.imread(inNameBase + '1SceneDepth_' + frameString + '.hdr')[:,:,:1]/65280.0
-  finalImage0 = imageio.imread(outNameBase + '0FinalImage_' + frameString + '.png')[:,:,:3]
-
-  if ident == 0 :
-
-    trainingSet_0SceneColor[trainCount] = sceneColor0
-    trainingSet_0SceneDepth[trainCount] = sceneDepth0
-    trainingSet_1SceneDepth[trainCount] = sceneDepth1
-    trainingSet_0FinalImage[trainCount] = finalImage0
-
-    trainCount += 1
-
-  elif ident == 1 :
-
-    crossValidSet_0SceneColor[crossValidCount] = sceneColor0
-    crossValidSet_0SceneDepth[crossValidCount] = sceneDepth0
-    crossValidSet_1SceneDepth[crossValidCount] = sceneDepth1
-    crossValidSet_0FinalImage[crossValidCount] = finalImage0
-
-    crossValidCount += 1
-
-  elif ident == 2 :
-
-    testSet_0SceneColor[testCount] = sceneColor0
-    testSet_0SceneDepth[testCount] = sceneDepth0
-    testSet_1SceneDepth[testCount] = sceneDepth1
-    testSet_0FinalImage[testCount] = finalImage0
-
-    testCount += 1
-
-print("\nTraining set size : ", len(trainingSet_0FinalImage))
-print("Cross validation set size : ", len(crossValidSet_0FinalImage))
-print("Test set size : ", len(testSet_0FinalImage))
+print("\nTraining set size : ", len(train_FinalImage))
+print("Cross validation set size : ", len(crossValid_FinalImage))
+print("Test set size : ", len(test_FinalImage))
 print()
 
 #-------------------------Debug-----------------------------#
