@@ -11,12 +11,15 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 os.environ['TF_ENABLE_AUTO_MIXED_PRECISION'] = '1'
 
 dataShape = 201
-digitFormat = 5
+frameSizeX = 1920
+frameSizeY = 1080
+digitFormat = 4
 debugSample = False
 sample = 110
 shuffleSeed = 42
 randomSample = False
-trainModel = True
+trainModel = False
+trainEpochs = 50
 saveFiles = True
 modelFromFile = True
 displayData = False
@@ -24,6 +27,8 @@ lossGraph = True
 resourcesFolder = "D:/Bachelor_resources/"
 weightsFileName = resourcesFolder + "2Depth_0_Weights.h5"
 modelFileName = resourcesFolder + "2Depth_0_Model.h5"
+testRender = True
+testFrame = resourcesFolder + "Capture1/Capture1_FinalImage_0407.png"
 
 
 #------------------------TF session-------------------------#
@@ -44,6 +49,23 @@ callback = accuracyCallback()
 
 #-------------------------Functions-------------------------#
 
+def AddMargin(image, marginSize) :
+  marginImage = np.zeros((image.shape[0] + 2 * marginSize, image.shape[1] + 2 * marginSize, image.shape[2]))
+  marginImage[marginSize:image.shape[0] + marginSize , marginSize:image.shape[1] + marginSize] = image
+
+  return marginImage 
+
+def SampleImage(image, samplePixel, sampleSize) :
+  shape = image.shape
+  sample = np.array([])
+
+  if (max(shape) < 2*sampleSize + 1) :
+      print("invalid image or sample size ")
+      return sample
+
+  sample = image[samplePixel[0] - sampleSize - 1:samplePixel[0] + sampleSize, samplePixel[1] - sampleSize - 1:samplePixel[1] + sampleSize]
+  return sample
+
 def ApplyKernel(image, flatKernel) :
   global dataShape
   kernel = tf.reshape(flatKernel, [tf.shape(flatKernel)[0], dataShape, dataShape])
@@ -52,19 +74,37 @@ def ApplyKernel(image, flatKernel) :
 
 
 def Loss(y_true, y_pred) :    # Nested function definition
-  delta = tf.reduce_mean(tf.abs(y_true - y_pred), axis=1)
+  delta = tf.image.total_variation(y_true, tf.reshape(y_pred, tf.reshape(y_pred, (tf.shape(y_pred)[0], frameSizeX, frameSizeY, 3))))
   return delta
 
 #-----------------------File handling-----------------------#
 
-workDirectory = 'D:/Bachelor_resources/samples2_Capture1'
-inputDirectory = workDirectory + '/' + 'Input'
-outputDirectory = workDirectory + '/' + 'Output'
+workDirectory = resourcesFolder  + 'Capture1_Sorted/'
 filePrefix = 'Capture1'
-inNameBase = inputDirectory + '/' + filePrefix + '_'
-outNameBase = outputDirectory + '/' + filePrefix + '_'
 
-setCount = len(os.listdir(outputDirectory))
+def FillNameSet(indexArray, SceneColorArr, SceneDepth0Arr, SceneDepth1Arr, FinalImageArr) :
+  for index in indexArray :
+    frameString = str(index) 
+    if (len(frameString) < digitFormat) :
+      frameString = (digitFormat - len(frameString)) * "0" + frameString
+
+    preFrameString = str(index-1)
+    if (len(preFrameString) < digitFormat) :
+      preFrameString = (digitFormat - len(preFrameString)) * "0" + preFrameString
+
+    sceneColor = imageio.imread(workDirectory + 'SceneColor/' + filePrefix + '_' + 'SceneColor' + '_' + frameString + '.png')[:,:,3]/255.0
+    sceneDepth0 = imageio.imread(workDirectory + 'SceneDepth/' + filePrefix + '_' + 'SceneDepth' + '_' + frameString + '.hdr')[:,:,1]/65280.0
+    sceneDepth1 = imageio.imread(workDirectory + 'SceneDepth/' + filePrefix + '_' + 'SceneDepth' + '_' + preFrameString + '.hdr')[:,:,1]/65280.0
+    finalImage = imageio.imread(workDirectory + 'SceneDepth/' + filePrefix + '_' + 'FinalImage' + '_' + preFrameString + '.png')[:,:,3]
+
+    SceneColorArr.append(sceneColor)
+    SceneDepth0Arr.append(sceneDepth0)
+    SceneDepth1Arr.append(sceneDepth1)
+    FinalImageArr.append(finalImage)
+
+startFrame = 227
+endFrame = 999
+setCount = 999 - 227
 print("Total training examples : " + str(setCount) + "\n")
 
 #Split into datasets
@@ -72,42 +112,58 @@ trainingSetSize = math.floor(setCount * 0.6)
 crossValidSetSize = math.floor(setCount * 0.2)
 testSetSize = math.floor(setCount * 0.2)
 
-setDescription = np.zeros(trainingSetSize)
-setDescription = np.append(setDescription, np.repeat(1, crossValidSetSize))
-setDescription = np.append(setDescription, np.repeat(2, testSetSize))
+setDescription = np.shuffle(np.arange(startFrame, endFrame + 1))
 np.random.seed(shuffleSeed)
 np.random.shuffle(setDescription)
+trainSet = setDescription[:math.floor(setCount * 0.6)]
+crossValidSet = setDescription[math.floor(setCount * 0.6):math.floor(setCount * 0.8)]
+testSet = setDescription[math.floor(setCount * 0.8):]
+
+train_SceneColor = []
+train_SceneDepth0 = []
+train_SceneDepth1 = []
+train_FinalImage = []
+
+for index in trainSet :
+  frameString = str(index) 
+  if (len(frameString) < digitFormat) :
+    frameString = (digitFormat - len(frameString)) * "0" + frameString
+
+  train_SceneColor.append(workDirectory + 'SceneColor/' + filePrefix + '_' + 'SceneColor' + '_' + frameString + '.png')
+
+
 
 #----------------------Image processing---------------------#
 
 #Training set
-trainingSet_0SceneColor = np.zeros((trainingSetSize, dataShape, dataShape, 3))
-trainingSet_0SceneDepth = np.zeros((trainingSetSize, dataShape, dataShape, 1))
-trainingSet_1SceneDepth = np.zeros((trainingSetSize, dataShape, dataShape, 1))
-trainingSet_0FinalImage = np.zeros((trainingSetSize, 3))
+trainingSet_0SceneColor = np.zeros((trainingSetSize, frameSizeX, frameSizeY, 3))
+trainingSet_0SceneDepth = np.zeros((trainingSetSize, frameSizeX, frameSizeY, 1))
+trainingSet_1SceneDepth = np.zeros((trainingSetSize, frameSizeX, frameSizeY, 1))
+trainingSet_0FinalImage = np.zeros((trainingSetSize, frameSizeX, frameSizeY, 3))
 
 #Cross validation set
-crossValidSet_0SceneColor = np.zeros((crossValidSetSize, dataShape, dataShape, 3))
-crossValidSet_0SceneDepth = np.zeros((crossValidSetSize, dataShape, dataShape, 1))
-crossValidSet_1SceneDepth = np.zeros((crossValidSetSize, dataShape, dataShape, 1))
-crossValidSet_0FinalImage = np.zeros((crossValidSetSize, 3))
+crossValidSet_0SceneColor = np.zeros((crossValidSetSize, frameSizeX, frameSizeY, 3))
+crossValidSet_0SceneDepth = np.zeros((crossValidSetSize, frameSizeX, frameSizeY, 1))
+crossValidSet_1SceneDepth = np.zeros((crossValidSetSize, frameSizeX, frameSizeY, 1))
+crossValidSet_0FinalImage = np.zeros((crossValidSetSize, frameSizeX, frameSizeY, 3))
 
 #Test set
-testSet_0SceneColor = np.zeros((testSetSize, dataShape, dataShape, 3))
-testSet_0SceneDepth = np.zeros((testSetSize, dataShape, dataShape, 1))
-testSet_1SceneDepth = np.zeros((testSetSize, dataShape, dataShape, 1))
-testSet_0FinalImage = np.zeros((testSetSize, 3))
+testSet_0SceneColor = np.zeros((testSetSize, frameSizeX, frameSizeY, 3))
+testSet_0SceneDepth = np.zeros((testSetSize, frameSizeX, frameSizeY, 1))
+testSet_1SceneDepth = np.zeros((testSetSize, frameSizeX, frameSizeY, 1))
+testSet_0FinalImage = np.zeros((testSetSize, frameSizeX, frameSizeY, 3))
 
 #Add input sets
 
 (trainCount, crossValidCount, testCount) = (0,0,0)
 
-for fileNum in range(setCount) :
-  if (fileNum%100 == 0) :
-    stateString = "Importing image " + str(fileNum)
+for fileNum in range(startFrame, endFrame) :
+  exampleNum = fileNum - startFrame
+  if (exampleNum%100 == 0) :
+    stateString = "Importing image " + str(exampleNum)
     print(stateString)
 
-  ident = setDescription[fileNum]
+  ident = setDescription[exampleNUm]
 
   #Import X and Y images
   frameString = str(fileNum) 
@@ -117,7 +173,7 @@ for fileNum in range(setCount) :
   sceneColor0 = imageio.imread(inNameBase + '0SceneColor_' + frameString + '.png')[:,:,:3]/255.0
   sceneDepth0 = imageio.imread(inNameBase + '0SceneDepth_' + frameString + '.hdr')[:,:,:1]/65280.0
   sceneDepth1 = imageio.imread(inNameBase + '1SceneDepth_' + frameString + '.hdr')[:,:,:1]/65280.0
-  finalImage0 = imageio.imread(outNameBase + '0FinalImage_' + frameString + '.png')[0,0,:3]
+  finalImage0 = imageio.imread(outNameBase + '0FinalImage_' + frameString + '.png')[:,:,:3]
 
   if ident == 0 :
 
@@ -168,7 +224,7 @@ if (debugSample) :
   fig.add_subplot(2, 2, 3)
   plt.imshow(trainingSet_1SceneDepth[sample,:,:,0] * 65280.0, cmap='gray')
   fig.add_subplot(2, 2, 4)
-  plt.imshow(trainingSet_0FinalImage[sample, np.newaxis, np.newaxis, :])
+  plt.imshow(trainingSet_0FinalImage[sample])
 
   centerPixel = math.floor((dataShape - 1)/2 + 1)
   print("\nCenter pixel value : ", trainingSet_0SceneColor[sample, centerPixel, centerPixel])
@@ -180,16 +236,15 @@ if (debugSample) :
 
 #---------------------TensorFlow model----------------------#
 
-input0 = tf.keras.Input(shape=(dataShape, dataShape, 3), name='input_0') #Scene color
-input1 = tf.keras.Input(shape=(dataShape, dataShape, 1), name='input_1') #Depth 0
-input2 = tf.keras.Input(shape=(dataShape, dataShape, 1), name='input_2') #Depth -1
+input0 = tf.keras.Input(shape=(frameSizeX, frameSizeY, 3), name='input_0') #Scene color
+input1 = tf.keras.Input(shape=(frameSizeX, frameSizeY, 1), name='input_1') #Depth 0
+input2 = tf.keras.Input(shape=(frameSizeX, frameSizeY, 1), name='input_2') #Depth -1
 
 #-Definition---------------------#
 
-# #Input0
-# x = tf.keras.layers.Dense(16, activation='relu')(input0)
-# x = tf.keras.layers.Flatten()(x)
-# x = tf.keras.Model(inputs=input0, outputs=x)
+#Input0
+x = tf.keras.layers.Flatten()(x)
+x = tf.keras.Model(inputs=input0, outputs=x)
 
 #Input1
 y = tf.keras.layers.MaxPooling2D(2,2)(input1)
@@ -198,8 +253,6 @@ y = tf.keras.layers.MaxPooling2D(4,4)(y)
 y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
 y = tf.keras.layers.MaxPooling2D(2,2)(y)
 y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
-# y = tf.keras.layers.MaxPooling2D(2,2)(y)
-# y = tf.keras.layers.Conv2D(2, (3,3), activation='relu')(y)
 y = tf.keras.layers.Flatten()(y)
 y = tf.keras.layers.Dense(dataShape, activation='relu')(y)
 y = tf.keras.Model(inputs=input1, outputs=y)
@@ -211,8 +264,6 @@ z = tf.keras.layers.MaxPooling2D(4,4)(z)
 z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
 z = tf.keras.layers.MaxPooling2D(2,2)(z)
 z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
-# z = tf.keras.layers.MaxPooling2D(2,2)(z)
-# z = tf.keras.layers.Conv2D(2, (3,3), activation='relu')(z)
 z = tf.keras.layers.Flatten()(z)
 z = tf.keras.layers.Dense(dataShape, activation='relu')(z)
 z = tf.keras.Model(inputs=input2, outputs=z)
@@ -222,8 +273,9 @@ combined = tf.keras.layers.concatenate([y.output, z.output])
 
 #Common network
 n = tf.keras.layers.Dense(64, activation='relu')(combined)
-n = tf.keras.layers.Dense(dataShape**2, activation='linear')(n)
-n = tf.keras.layers.Lambda(lambda x: ApplyKernel(input0, x))(n)
+n = tf.keras.layers.Dense(dataShape**2, activation='relu')(n)
+n = tf.keras.layers.concatenate([n, x.output])
+n = tf.keras.layers.Dense(frameSizeX * frameSizeY, activation='relu')(n)
 
 #Model
 model = tf.keras.Model(inputs=[input0, y.input, z.input], outputs=n)
@@ -244,7 +296,7 @@ if (trainModel) :
     [trainingSet_0SceneColor, trainingSet_0SceneDepth, trainingSet_1SceneDepth],
     trainingSet_0FinalImage,
     validation_data=([crossValidSet_0SceneColor, crossValidSet_0SceneDepth, crossValidSet_1SceneDepth], crossValidSet_0FinalImage),
-    epochs=40
+    epochs=trainEpochs
   )
 
   # Get training and test loss histories
@@ -271,6 +323,9 @@ if (trainModel) :
     plt.ylabel('Loss')
     plt.ylim(0, 70)
     plt.show()
+
+else :
+  model.load_weights(weightsFileName)
 
 #--------------------------------------------------------------#
 
@@ -325,3 +380,39 @@ batchPredict = model.predict({'input_0':testSet_0SceneColor, 'input_1':testSet_0
 end = perf_counter_ns()
 
 print("Time per image: {:.2f}ms ".format((end-start)/len(testSet_0FinalImage)/1000000.0))
+
+if (testRender):
+  sampleSize = math.floor((dataShape - 1)/2.0)
+
+  exSceneColor = imageio.imread(testFrame)[:,:,:3]/255.0
+  exSceneDepth0 = imageio.imread(testFrame)[:,:,:1]/65280.0
+  exSceneDepth1 = imageio.imread(testFrame)[:,:,:1]/65280.0
+
+  frameShape = exSceneColor.shape
+
+  exSceneColor = AddMargin(exSceneColor, sampleSize)
+  exSceneDepth0 = AddMargin(exSceneDepth0, sampleSize)
+  exSceneDepth1 = AddMargin(exSceneDepth1, sampleSize)
+  
+  finalImage = np.zeros((frameShape[0], frameShape[1], 3))
+  
+  print()
+
+  batchSceneColor = np.zeros((frameShape[1], dataShape, dataShape, 3))
+  batchSceneDepth0 = np.zeros((frameShape[1], dataShape, dataShape, 1))
+  batchSceneDepth1 = np.zeros((frameShape[1], dataShape, dataShape, 1))
+
+  for x in range(0, frameShape[0]):
+    print("Render progress : {:.2f} %".format(100 * x/float(frameShape[0])), end='\r')
+    for y in range(0, frameShape[1]):
+      batchSceneColor[y] = SampleImage(exSceneColor, (x + sampleSize + 1,y + sampleSize + 1), sampleSize)
+      batchSceneDepth0[y] = SampleImage(exSceneDepth0, (x + sampleSize + 1,y + sampleSize + 1), sampleSize)
+      batchSceneDepth1[y] = SampleImage(exSceneDepth1, (x + sampleSize + 1,y + sampleSize + 1), sampleSize)
+
+    outColor = model.predict({'input_0':batchSceneColor, 'input_1':batchSceneDepth0, 
+      'input_2':batchSceneDepth1})
+      
+    finalImage[x] = outColor
+
+  plt.imshow(finalImage)
+  plt.show()
