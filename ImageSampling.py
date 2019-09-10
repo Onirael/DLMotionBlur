@@ -7,7 +7,7 @@ import imageio, math, random, png, os
 #-----------------------------User Input--------------------------------------#
 
 sSize = 100
-samples = 100
+samples = 1
 frameAmount = 454
 frameOffset = 2
 startFrame = 444 #Number of first frame to compute
@@ -16,7 +16,9 @@ pixelMargin = True
 digitFormat = 4 #Number of digits in the frame number identifier
 fileTypes = [".png", ".exr", ".hdr"]
 workDirectory = 'D:/Bachelor_resources/Capture1'
-outputDirectory = 'samples2_' + workDirectory
+# outputDirectory = 'samples2_' + workDirectory
+outputDirectory = "C:/Users/Vindix/Desktop/Test"
+filePrefix = 'Capture1_'
 inputList = ['0FinalImage', '0SceneDepth', '1SceneDepth', '2SceneDepth', '0SceneColor']
 
 #-----------------------------------------------------------------------------#
@@ -90,7 +92,7 @@ for iteration in range(startFrame, iterations + startFrame) :
         if (len(frameString) < digitFormat) :
             frameString = (digitFormat - len(frameString)) * "0" + frameString
         
-        filename = workDirectory + '_' + inputType + '_' + frameString + fileType
+        filename = workDirectory + '/' + filePrefix + inputType + '_' + frameString + fileType
 
         valid = False
         for extension in fileTypes :
@@ -101,11 +103,11 @@ for iteration in range(startFrame, iterations + startFrame) :
             continue
 
         if fileType == '.exr' :
-            baseImage = cv.imread(workDirectory + '/' + filename, cv.IMREAD_ANYDEPTH)
+            baseImage = cv.imread(filename, cv.IMREAD_ANYDEPTH)
         elif fileType == '.png' :
-            baseImage = io.imread(workDirectory + '/' + filename)
+            baseImage = io.imread(filename)
         elif fileType == '.hdr' :
-            baseImage = imageio.imread(workDirectory + '/' + filename)
+            baseImage = imageio.imread(filename)
         
         if inputType != 'FinalImage' and pixelMargin : #Add pixel margin
             marginImage = np.zeros((baseImage.shape[0] + 2 * sSize, baseImage.shape[1] + 2 * sSize, baseImage.shape[2]))
@@ -135,11 +137,11 @@ for iteration in range(startFrame, iterations + startFrame) :
             if inputType == 'FinalImage' :
                 subFolder = 'Output'
 
-            fileOutName = outputDirectory + '/' + subFolder + '/' + workDirectory + '_' + input + '_' + outputID + fileType
+            fileOutName = outputDirectory + '/' + subFolder + '/' + filePrefix + input + '_' + outputID + fileType
             print("Writing sample to file", fileOutName)
 
             if fileType in ['.exr', '.hdr'] :
-                cv.imwrite(fileOutName, imageSample)
+                imageio.imwrite(fileOutName, imageSample)
             elif fileType == '.png' :
                 try :
                     io.imsave(fileOutName, imageSample, check_contrast=False, plugin='imageio')
