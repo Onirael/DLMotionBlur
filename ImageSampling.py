@@ -7,17 +7,17 @@ import imageio, math, random, png, os
 #-----------------------------User Input--------------------------------------#
 
 sSize = 100
-samples = 1
-frameAmount = 454
+samples = 100
+frameAmount = 999
 frameOffset = 2
-startFrame = 444 #Number of first frame to compute
+startFrame = 613 #Number of first frame to compute
+startSampleNumber = 38800
 frameGap = 0
 pixelMargin = True
 digitFormat = 4 #Number of digits in the frame number identifier
 fileTypes = [".png", ".exr", ".hdr"]
 workDirectory = 'D:/Bachelor_resources/Capture1'
-# outputDirectory = 'samples2_' + workDirectory
-outputDirectory = "C:/Users/Vindix/Desktop/Test"
+outputDirectory = 'D:/Bachelor_resources/samples3_Capture1'
 filePrefix = 'Capture1_'
 inputList = ['0FinalImage', '0SceneDepth', '1SceneDepth', '2SceneDepth', '0SceneColor']
 
@@ -51,18 +51,17 @@ def colorImage(image, samplePixel, sampleSize) :
 
 #-----------------------------------------------------------------------------#
 
-#testImage = baseImage = io.imread(workDirectory + '/' + workDirectory + '_' + inputList[0][1:] + '_' + (digitFormat * '0') + fileTypes[0])
 testImage = io.imread(workDirectory + '/' + os.listdir(workDirectory)[0])
 iterations = int((1.0 * frameAmount)/(frameGap + 1) - startFrame)
 exportDigitFormat = math.floor(math.log(samples * frameAmount, 10)) + 1
 subFolder = ''
 
-print("Reading frames {} to {}\n".format(startFrame, iterations + startFrame))
+print("Reading frames {} to {}".format(startFrame, iterations + startFrame))
 
 for iteration in range(startFrame, iterations + startFrame) :
 
     frame = iteration * (frameGap + 1) + frameOffset #Add 1 to the frame value to ignore frame 0
-    print("Frame : ", frame)
+    print("\n\n" + "#" + 5 * "-" + "Frame : " + str(frame) + " " + 20 * "-" + "#")
     frameString = ""
 
     pixels = [] #Used to store all computed pixel values for debugging
@@ -120,7 +119,11 @@ for iteration in range(startFrame, iterations + startFrame) :
             baseImage = baseImage[:,:,:3]
             baseImage = baseImage.astype('uint8') 
         
+        print()
         for i in range(samples) :
+            progress = (i + 1)/samples
+            print("Writing {} to disk [".format(inputType) + math.floor(40 * progress) * "#" + (40 - math.floor(40 * progress)) * " " + "] {:.0f}%".format(100 * progress), end='\r')
+
             pixel = pixels[i]
             if inputType == 'FinalImage' :
                 imageSample = np.array([[baseImage[pixel[0], pixel[1]]]]) #Sample the single pixel of the final image
@@ -128,7 +131,7 @@ for iteration in range(startFrame, iterations + startFrame) :
             else :
                 imageSample = sampleImage(baseImage, pixel, sSize) #Sample pixels of image
 
-            outputID = str(i + (iteration - startFrame) * samples)
+            outputID = str(i + (iteration - startFrame) * samples + startSampleNumber)
             if (len(outputID) < exportDigitFormat) :
                 outputID = (exportDigitFormat - len(outputID)) * "0" + outputID
 
@@ -138,10 +141,9 @@ for iteration in range(startFrame, iterations + startFrame) :
                 subFolder = 'Output'
 
             fileOutName = outputDirectory + '/' + subFolder + '/' + filePrefix + input + '_' + outputID + fileType
-            print("Writing sample to file", fileOutName)
 
             if fileType in ['.exr', '.hdr'] :
-                imageio.imwrite(fileOutName, imageSample)
+                cv.imwrite(fileOutName, imageSample.astype('float32'))
             elif fileType == '.png' :
                 try :
                     io.imsave(fileOutName, imageSample, check_contrast=False, plugin='imageio')
@@ -150,3 +152,5 @@ for iteration in range(startFrame, iterations + startFrame) :
                     print(imageSample.shape)
                     print(pixel)
                     quit()
+
+print()
