@@ -12,9 +12,9 @@ os.environ['TF_ENABLE_AUTO_MIXED_PRECISION'] = '1'
 
 dataShape = 201
 digitFormat = 5
-batchSize = 100
+batchSize = 500
 useAllExamples = False
-usedExamples = 1000
+usedExamples = 10000
 debugSample = False
 sample = 150
 shuffleSeed = 42
@@ -26,7 +26,7 @@ modelFromFile = True
 displayData = False
 lossGraph = True
 resourcesFolder = "D:/Bachelor_resources/"
-testRender = True
+testRender = False
 weightsFileName = resourcesFolder + "2Depth_0_Weights.h5"
 modelFileName = resourcesFolder + "2Depth_0_Model.h5"
 
@@ -39,42 +39,86 @@ config = tf.compat.v1.ConfigProto()
 config.gpu_options.allow_growth = True
 session = tf.compat.v1.Session(config=config)
 
-#-------------------------Callback--------------------------#
+#-----------------------Keras Sequence----------------------#
 
-#-------------------------Functions-------------------------#
+class DataSequence(tf.keras.utils.Sequence) :
 
-def MakeGenerator(indexArray, directory, batch_size, verbose=True) :
-  global filePrefix
-  global dataShape
+  def __init__(self, indexArray, directory, batch_size, verbose=False) :
+    self.batch_size = batch_size
+    self.directory = directory
+    self.indexArray = indexArray
+    self.verbose = verbose
+    self.arrayLen = len(indexArray)
+    self.batchAmount = math.ceil(self.arrayLen/self.batch_size)
+
+  def __len__(self) :
+    return self.batchAmount
   
-  arrayLen = len(indexArray)
-  batchAmount = math.ceil(arrayLen/batch_size)
+  def __getitem__(self, idx) :
+    global dataShape
+    global digitFormat
+    global filePrefix
 
-  for batch in range(batchAmount) :
-    batch_SceneColor = np.zeros((batch_size, dataShape, dataShape, 3))
-    batch_SceneDepth0 = np.zeros((batch_size, dataShape, dataShape, 1))
-    batch_SceneDepth1 = np.zeros((batch_size, dataShape, dataShape, 1))
-    batch_FinalImage = np.zeros((batch_size, 1, 1, 3))
+    batch_SceneColor = np.zeros((self.batch_size, dataShape, dataShape, 3))
+    batch_SceneDepth0 = np.zeros((self.batch_size, dataShape, dataShape, 1))
+    batch_SceneDepth1 = np.zeros((self.batch_size, dataShape, dataShape, 1))
+    batch_FinalImage = np.zeros((self.batch_size, 3))
 
-    if verbose :
-      print("Importing Batch {}".format(batch), end='\r')
+    if self.verbose :
+      print("\nImporting Batch {}".format(idx))
 
-    for index in range(batch_size) :
-      if (index + batch_size * batch >= arrayLen) :
-        frame = indexArray[index]
+    for index in range(self.batch_size) :
+      if (index + self.batch_size * idx >= self.arrayLen) :
+        frame = self.indexArray[index]
       else :
-        frame = indexArray[index + batch_size * batch]
+        frame = self.indexArray[index + self.batch_size * idx]
 
       frameString = str(frame)
       if (len(frameString) < digitFormat) :
         frameString = (digitFormat - len(frameString)) * "0" + frameString
 
-      batch_SceneColor[index] = (imageio.imread(directory + 'Input/' + filePrefix + '0SceneColor_' + frameString + '.png')[:,:,:3]/255.0).astype('float16')
-      batch_SceneDepth0[index] = (imageio.imread(directory + 'Input/' + filePrefix + '0SceneDepth_' + frameString + '.hdr')[:,:,:1]/3000.0).astype('float16')
-      batch_SceneDepth1[index] = (imageio.imread(directory + 'Input/' + filePrefix + '1SceneDepth_' + frameString + '.hdr')[:,:,:1]/3000.0).astype('float16')
-      batch_FinalImage[index] = (imageio.imread(directory + 'Output/' + filePrefix + '0FinalImage_' + frameString + '.png')[0,0,:3]).astype('float16')
+      batch_SceneColor[index] = (imageio.imread(self.directory + 'Input/' + filePrefix + '0SceneColor_' + frameString + '.png')[:,:,:3]/255.0).astype('float16')
+      batch_SceneDepth0[index] = (imageio.imread(self.directory + 'Input/' + filePrefix + '0SceneDepth_' + frameString + '.hdr')[:,:,:1]/3000.0).astype('float16')
+      batch_SceneDepth1[index] = (imageio.imread(self.directory + 'Input/' + filePrefix + '1SceneDepth_' + frameString + '.hdr')[:,:,:1]/3000.0).astype('float16')
+      batch_FinalImage[index] = (imageio.imread(self.directory + 'Output/' + filePrefix + '0FinalImage_' + frameString + '.png')[0,0,:3]).astype('float16')
 
-    yield ({'input_0':batch_SceneColor, 'input_1':batch_SceneDepth0, 'input_2':batch_SceneDepth1}, batch_FinalImage)
+    return ({'input_0':batch_SceneColor, 'input_1':batch_SceneDepth0, 'input_2':batch_SceneDepth1}, batch_FinalImage)
+
+
+#-------------------------Functions-------------------------#
+
+def MakeGenerator(indexArray, directory, batch_size, verbose=False) :
+  global filePrefix
+  global dataShape
+  
+  arrayLen = len(indexArray)
+  batchAmount = math.ceil(arrayLen/batch_size)
+  while True :
+    for batch in range(batchAmount) :
+      batch_SceneColor = np.zeros((batch_size, dataShape, dataShape, 3))
+      batch_SceneDepth0 = np.zeros((batch_size, dataShape, dataShape, 1))
+      batch_SceneDepth1 = np.zeros((batch_size, dataShape, dataShape, 1))
+      batch_FinalImage = np.zeros((batch_size, 3))
+
+      if verbose :
+        print("\nImporting Batch {}".format(batch))
+
+      for index in range(batch_size) :
+        if (index + batch_size * batch >= arrayLen) :
+          frame = indexArray[index]
+        else :
+          frame = indexArray[index + batch_size * batch]
+
+        frameString = str(frame)
+        if (len(frameString) < digitFormat) :
+          frameString = (digitFormat - len(frameString)) * "0" + frameString
+
+        batch_SceneColor[index] = (imageio.imread(directory + 'Input/' + filePrefix + '0SceneColor_' + frameString + '.png')[:,:,:3]/255.0).astype('float16')
+        batch_SceneDepth0[index] = (imageio.imread(directory + 'Input/' + filePrefix + '0SceneDepth_' + frameString + '.hdr')[:,:,:1]/3000.0).astype('float16')
+        batch_SceneDepth1[index] = (imageio.imread(directory + 'Input/' + filePrefix + '1SceneDepth_' + frameString + '.hdr')[:,:,:1]/3000.0).astype('float16')
+        batch_FinalImage[index] = (imageio.imread(directory + 'Output/' + filePrefix + '0FinalImage_' + frameString + '.png')[0,0,:3]).astype('float16')
+
+      yield ({'input_0':batch_SceneColor, 'input_1':batch_SceneDepth0, 'input_2':batch_SceneDepth1}, batch_FinalImage)
 
 def MakeRenderGenerator(sceneColor, sceneDepth0, sceneDepth1, frameShape, verbose=True) :
 
@@ -84,15 +128,15 @@ def MakeRenderGenerator(sceneColor, sceneDepth0, sceneDepth1, frameShape, verbos
 
     curRow = \
     {
-      'input_0' : np.zeros((frameShape[1], dataShape, dataShape, 3)), 
-      'input_1' : np.zeros((frameShape[1], dataShape, dataShape, 1)), 
+      'input_0' : np.zeros((frameShape[1], dataShape, dataShape, 3)),
+      'input_1' : np.zeros((frameShape[1], dataShape, dataShape, 1)),
       'input_2' : np.zeros((frameShape[1], dataShape, dataShape, 1)),
     }
 
     for column in range(frameShape[1]) :
-      curRow['input_0'][column] = sceneColor[column:dataShape + column, row:dataShape + row]
-      curRow['input_1'][column] = sceneDepth0[column:dataShape + column, row:dataShape + row]
-      curRow['input_2'][column] = sceneDepth1[column:dataShape + column, row:dataShape + row]
+      curRow['input_0'][column] = sceneColor[row:dataShape + row, column:dataShape + column]
+      curRow['input_1'][column] = sceneDepth0[row:dataShape + row, column:dataShape + column]
+      curRow['input_2'][column] = sceneDepth1[row:dataShape + row, column:dataShape + column]
     
     yield curRow
 
@@ -129,9 +173,9 @@ trainSet = setDescription[:trainingSetSize]
 crossValidSet = setDescription[trainingSetSize:trainingSetSize + crossValidSetSize]
 testSet = setDescription[trainingSetSize + crossValidSetSize:]
 
-trainGenerator = MakeGenerator(trainSet, workDirectory, batchSize, verbose=True)
-crossValidGenerator = MakeGenerator(crossValidSet, workDirectory, batchSize, verbose=False)
-testGenerator = MakeGenerator(testSet, workDirectory, batchSize)
+trainGenerator = DataSequence(trainSet, workDirectory, batchSize, verbose=False)
+crossValidGenerator = DataSequence(crossValidSet, workDirectory, batchSize)
+testGenerator = DataSequence(testSet, workDirectory, batchSize)
 
 print("\nTraining set size : ", trainingSetSize)
 print("Cross validation set size : ", crossValidSetSize)
@@ -222,41 +266,13 @@ layer_names = [layer.name for layer in model.layers]
 model.summary()
 
 if (trainModel) :
-
-  testBatch = ({'input_0':np.zeros((batchSize, dataShape, dataShape, 3)),
-  'input_1':np.zeros((batchSize, dataShape, dataShape, 1)),
-  'input_2':np.zeros((batchSize, dataShape, dataShape, 1))
-  }, np.zeros((batchSize, 1, 1, 3)))
-  
-  for frame in range(batchSize):
-    frameString = str(frame)
-    if (len(frameString) < digitFormat) :
-      frameString = (digitFormat - len(frameString)) * "0" + frameString
-  
-    testBatch[0]['input_0'][frame] = \
-      imageio.imread(workDirectory + 'Input/' + filePrefix + '0SceneColor_' + frameString + '.png')[:,:,:3]/255.0
-    testBatch[0]['input_1'][frame] = \
-      imageio.imread(workDirectory + 'Input/' + filePrefix + '0SceneDepth_' + frameString + '.hdr')[:,:,:1]/255.0
-    testBatch[0]['input_2'][frame] = \
-      imageio.imread(workDirectory + 'Input/' + filePrefix + '1SceneDepth_' + frameString + '.hdr')[:,:,:1]/255.0
-    testBatch[0][frame] = \
-      imageio.imread(workDirectory + 'Output/' + filePrefix + '0FinalImage_' + frameString + '.png')[0,0,:3]
-
-  # testBatch = next(trainGenerator)
-  # testValid = next(crossValidGenerator)
-  training = model.fit(
-    testBatch[0],
-    testBatch[1],
-    epochs=trainEpochs,
-  )
-  quit()
-
   training = model.fit_generator(
     trainGenerator,
     validation_data=crossValidGenerator,
     validation_steps=math.ceil(testSetSize/batchSize),
     epochs=trainEpochs,
     steps_per_epoch=math.ceil(trainingSetSize/batchSize),
+    # use_multiprocessing=True
   )
 
   # Get training and test loss histories
@@ -326,22 +342,29 @@ if (trainModel) :
 
     #-----------------------------------------------------------#
 
+else :
+  model.load_weights(weightsFileName)
+
+
+#--------------------------Test Model--------------------------#
+
 testLoss = model.evaluate_generator(testGenerator, steps=math.ceil(testSetSize/batchSize))
 
-sampleGenerator = MakeGenerator(testGenerator, workDirectory, batchSize)
+sampleGenerator = MakeGenerator(testSet, workDirectory, batchSize)
 for i in range(math.floor(sample/batchSize) - 1) :
   next(sampleGenerator)
 example = next(sampleGenerator)
 batchElement = sample%batchSize
 
-testPredict = model.predict_generator(testGenerator, steps=math.ceil(testSetSize/batchSize))[0]
+testPredict = model.predict(example[0], steps=math.ceil(testSetSize/batchSize))
 
 # Display sample results for debugging purpose
 print("Test color : ", testPredict)
 print("Expected color : ", example[1])
+print("Test loss : ", testLoss)
 
 start = perf_counter_ns()
-batchPredict = model.predict_generator(testGenerator, steps=math.ceil(testSize/batchSize))
+batchPredict = model.predict_generator(testGenerator, steps=math.ceil(testSetSize/batchSize))[batchElement]
 end = perf_counter_ns()
 
 print("Time per image: {:.2f}ms ".format((end-start)/testSetSize/1000000.0))
@@ -349,7 +372,7 @@ print("Time per image: {:.2f}ms ".format((end-start)/testSetSize/1000000.0))
 if testRender:
   fig = plt.figure(figsize=(8,8))
   
-  render_0FinalImage = imageio.imread('D:/Bachelor_resources/Capture1Capture1_FinalImage_0411.png')
+  render_0FinalImage = imageio.imread('D:/Bachelor_resources/Capture1/Capture1_FinalImage_0411.png')
   frameShape = render_0FinalImage.shape
 
   padSize = math.floor((dataShape - 1)/2)
@@ -357,12 +380,12 @@ if testRender:
   render_0SceneDepth = np.zeros((frameShape[0] + 2 * padSize, frameShape[1] + 2 * padSize, 1))
   render_1SceneDepth = np.zeros((frameShape[0] + 2 * padSize, frameShape[1] + 2 * padSize, 1))
 
-  render_0SceneColor[padSize:padSize + frameShape[0], padSize + padSize + frameShape[1]] = \
-    imageio.imread('D:/Bachelor_resources/Capture1/Capture1_SceneColor_0412.png')
-  render_0SceneDepth[padSize:padSize + frameShape[0], padSize + padSize + frameShape[1]] = \
-    imageio.imread('D:/Bachelor_resources/Capture1/Capture1_SceneDepth_0412.png')
-  render_1SceneDepth[padSize:padSize + frameShape[0], padSize + padSize + frameShape[1]] = \
-    imageio.imread('D:/Bachelor_resources/Capture1/Capture1_SceneDepth_0411.png')
+  render_0SceneColor[padSize:padSize + frameShape[0], padSize:padSize + frameShape[1]] = \
+    (imageio.imread('D:/Bachelor_resources/Capture1/Capture1_SceneColor_0412.png')[:,:,:3]/255.0).astype('float16')
+  render_0SceneDepth[padSize:padSize + frameShape[0], padSize:padSize + frameShape[1]] = \
+    (imageio.imread('D:/Bachelor_resources/Capture1/Capture1_SceneDepth_0412.hdr')[:,:,:1]/3000.0).astype('float16')
+  render_1SceneDepth[padSize:padSize + frameShape[0], padSize:padSize + frameShape[1]] = \
+    (imageio.imread('D:/Bachelor_resources/Capture1/Capture1_SceneDepth_0411.hdr')[:,:,:1]/3000.0).astype('float16')
   
   renderGenerator = MakeRenderGenerator(render_0SceneColor, render_0SceneDepth, render_1SceneDepth, frameShape)
   renderedImage = model.predict_generator(renderGenerator, steps=frameShape[0])

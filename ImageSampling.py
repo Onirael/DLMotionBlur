@@ -10,8 +10,8 @@ sSize = 100
 samples = 100
 frameAmount = 999
 frameOffset = 2
-startFrame = 613 #Number of first frame to compute
-startSampleNumber = 38800
+startFrame = 226 #Number of first frame to compute
+startSampleNumber = 0
 frameGap = 0
 pixelMargin = True
 digitFormat = 4 #Number of digits in the frame number identifier
@@ -51,6 +51,7 @@ def colorImage(image, samplePixel, sampleSize) :
 
 #-----------------------------------------------------------------------------#
 
+frameAmount -= 1
 testImage = io.imread(workDirectory + '/' + os.listdir(workDirectory)[0])
 iterations = int((1.0 * frameAmount)/(frameGap + 1) - startFrame)
 exportDigitFormat = math.floor(math.log(samples * frameAmount, 10)) + 1
