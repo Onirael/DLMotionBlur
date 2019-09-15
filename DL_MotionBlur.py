@@ -10,7 +10,7 @@ deprecation._PRINT_DEPRECATION_WARNINGS = False
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 os.environ['TF_ENABLE_AUTO_MIXED_PRECISION'] = '1'
 
-dataShape = 201
+dataShape = 101
 digitFormat = 5
 batchSize = 100
 useAllExamples = False
@@ -19,18 +19,18 @@ debugSample = False
 sample = 150
 shuffleSeed = 42
 randomSample = True
-trainModel = True
+trainModel = False
 trainEpochs = 50
 saveFiles = True
 modelFromFile = True
 displayData = False
 lossGraph = True
 resourcesFolder = "D:/Bachelor_resources/"
-testRender = False
-weightsFileName = resourcesFolder + "3Depth_0_Weights.h5"
-modelFileName = resourcesFolder + "3Depth_0_Model.h5"
+testRender = True
+weightsFileName = resourcesFolder + "3Depth_1_Weights.h5"
+modelFileName = resourcesFolder + "3Depth_1_Model.h5"
 
-workDirectory = resourcesFolder  + 'samples3_Capture1/'
+workDirectory = resourcesFolder  + 'samples4_Capture1/'
 filePrefix = 'Capture1_'
 
 #------------------------TF session-------------------------#

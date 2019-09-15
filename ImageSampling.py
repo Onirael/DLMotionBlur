@@ -1,12 +1,13 @@
 import numpy as np
 from matplotlib import pyplot as plt
+from time import perf_counter_ns
 from skimage import data, io
 import cv2 as cv
 import imageio, math, random, png, os
 
 #-----------------------------User Input--------------------------------------#
 
-sSize = 100
+sSize = 50
 samples = 100
 frameAmount = 999
 frameOffset = 2
@@ -17,7 +18,7 @@ pixelMargin = True
 digitFormat = 4 #Number of digits in the frame number identifier
 fileTypes = [".png", ".exr", ".hdr"]
 workDirectory = 'D:/Bachelor_resources/Capture1'
-outputDirectory = 'D:/Bachelor_resources/samples3_Capture1'
+outputDirectory = 'D:/Bachelor_resources/samples4_Capture1'
 filePrefix = 'Capture1_'
 inputList = ['0FinalImage', '0SceneDepth', '1SceneDepth', '2SceneDepth', '0SceneColor']
 
@@ -60,6 +61,7 @@ subFolder = ''
 print("Reading frames {} to {}".format(startFrame, iterations + startFrame))
 
 for iteration in range(startFrame, iterations + startFrame) :
+    timerStart = perf_counter_ns()
 
     frame = iteration * (frameGap + 1) + frameOffset #Add 1 to the frame value to ignore frame 0
     print("\n\n" + "#" + 5 * "-" + "Frame : " + str(frame) + " " + 20 * "-" + "#")
@@ -153,5 +155,10 @@ for iteration in range(startFrame, iterations + startFrame) :
                     print(imageSample.shape)
                     print(pixel)
                     quit()
+
+    timerEnd = perf_counter_ns()
+    computationTime = (timerEnd - timerStart)/(10**9)
+    print("\nFrame samples exported in {:.2f}s, {} frames remaining, ETA: {} minutes".format(computationTime, \
+        iterations-iteration + startFrame, int((computationTime * ((iterations - iteration) + startFrame))/60)))
 
 print()
