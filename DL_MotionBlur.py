@@ -13,7 +13,7 @@ os.environ['TF_ENABLE_AUTO_MIXED_PRECISION'] = '1'
 dataShape = 201
 digitFormat = 5
 batchSize = 200
-useAllExamples = False
+useAllExamples = True
 usedExamples = 10000
 debugSample = False
 sample = 150
@@ -91,7 +91,7 @@ def MakeRenderGenerator(sceneColor, sceneDepth0, sceneDepth1, frameShape, rowSte
 
   for row in range(frameShape[0]) :
     if verbose:
-      print("Rendering... ({:.2f}%)".format((row/rowSteps)/frameShape[0] * 100), end="\r")
+      print("Rendering... ({:.2f}%)".format(row/frameShape[0] * 100), end="\r")
 
     batchSize = math.floor(frameShape[1]/rowSteps)
 
@@ -356,7 +356,7 @@ if testRender:
   renderGenerator = MakeRenderGenerator(render_0SceneColor, render_0SceneDepth, render_1SceneDepth, frameShape, rowSteps=rowSteps)
   renderedImage = model.predict_generator(renderGenerator, steps=frameShape[0] * rowSteps)
 
-  finalImage = np.reshape(renderedImage, frameShape)
+  finalImage = np.reshape(renderedImage/255.0, (frameShape[0], frameShape[1], 3))
 
   fig.add_subplot(2, 1, 1)
   plt.imshow(render_0FinalImage)
