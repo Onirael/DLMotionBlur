@@ -12,14 +12,14 @@ os.environ['TF_ENABLE_AUTO_MIXED_PRECISION'] = '1'
 
 dataShape = 101
 digitFormat = 5
-batchSize = 100
-useAllExamples = False
+batchSize = 200
+useAllExamples = True
 usedExamples = 10000
 debugSample = False
 sample = 150
 shuffleSeed = 42
 randomSample = True
-trainModel = False
+trainModel = True
 trainEpochs = 50
 saveFiles = True
 modelFromFile = True
@@ -89,62 +89,28 @@ class DataSequence(tf.keras.utils.Sequence) :
 
 #-------------------------Functions-------------------------#
 
-def MakeGenerator(indexArray, directory, batch_size, verbose=False) :
-  global filePrefix
-  global dataShape
-  
-  arrayLen = len(indexArray)
-  batchAmount = math.ceil(arrayLen/batch_size)
-  while True :
-    for batch in range(batchAmount) :
-      batch_SceneColor = np.zeros((batch_size, dataShape, dataShape, 3))
-      batch_SceneDepth0 = np.zeros((batch_size, dataShape, dataShape, 1))
-      batch_SceneDepth1 = np.zeros((batch_size, dataShape, dataShape, 1))
-      batch_SceneDepth2 = np.zeros((batch_size, dataShape, dataShape, 1))
-      batch_FinalImage = np.zeros((batch_size, 3))
-
-      if verbose :
-        print("\nImporting Batch {}".format(batch))
-
-      for index in range(batch_size) :
-        if (index + batch_size * batch >= arrayLen) :
-          frame = indexArray[index]
-        else :
-          frame = indexArray[index + batch_size * batch]
-
-        frameString = str(frame)
-        if (len(frameString) < digitFormat) :
-          frameString = (digitFormat - len(frameString)) * "0" + frameString
-
-        batch_SceneColor[index] = (imageio.imread(directory + 'Input/' + filePrefix + '0SceneColor_' + frameString + '.png')[:,:,:3]/255.0).astype('float16')
-        batch_SceneDepth0[index] = (imageio.imread(directory + 'Input/' + filePrefix + '0SceneDepth_' + frameString + '.hdr')[:,:,:1]/3000.0).astype('float16')
-        batch_SceneDepth1[index] = (imageio.imread(directory + 'Input/' + filePrefix + '1SceneDepth_' + frameString + '.hdr')[:,:,:1]/3000.0).astype('float16')
-        batch_SceneDepth2[index] = (imageio.imread(directory + 'Input/' + filePrefix + '2SceneDepth_' + frameString + '.hdr')[:,:,:1]/3000.0).astype('float16')
-        batch_FinalImage[index] = (imageio.imread(directory + 'Output/' + filePrefix + '0FinalImage_' + frameString + '.png')[0,0,:3]).astype('float16')
-
-      yield ({'input_0':batch_SceneColor, 'input_1':batch_SceneDepth0, 'input_2':batch_SceneDepth1, 'input_3':batch_SceneDepth2}, batch_FinalImage)
-
-def MakeRenderGenerator(sceneColor, sceneDepth0, sceneDepth1, sceneDepth2, frameShape, verbose=True) :
+def MakeRenderGenerator(sceneColor, sceneDepth0, sceneDepth1, frameShape, rowSteps=4, verbose=True) :
 
   for row in range(frameShape[0]) :
     if verbose:
       print("Rendering... ({:.2f}%)".format(row/frameShape[0] * 100), end="\r")
 
-    curRow = \
-    {
-      'input_0' : np.zeros((frameShape[1], dataShape, dataShape, 3)),
-      'input_1' : np.zeros((frameShape[1], dataShape, dataShape, 1)),
-      'input_2' : np.zeros((frameShape[1], dataShape, dataShape, 1)),
-      'input_3' : np.zeros((frameShape[1], dataShape, dataShape, 1)),
-    }
+    batchSize = math.floor(frameShape[1]/rowSteps)
 
-    for column in range(frameShape[1]) :
-      curRow['input_0'][column] = sceneColor[row:dataShape + row, column:dataShape + column]
-      curRow['input_1'][column] = sceneDepth0[row:dataShape + row, column:dataShape + column]
-      curRow['input_2'][column] = sceneDepth1[row:dataShape + row, column:dataShape + column]
-      curRow['input_3'][column] = sceneDepth2[row:dataShape + row, column:dataShape + column]
-    
-    yield curRow
+    for columnStep in range(rowSteps) :
+      curRow = \
+      {
+        'input_0' : np.zeros((batchSize, dataShape, dataShape, 3)),
+        'input_1' : np.zeros((batchSize, dataShape, dataShape, 1)),
+        'input_2' : np.zeros((batchSize, dataShape, dataShape, 1)),
+      }
+      for batchColumn in range(batchSize) :
+        column = columnStep * batchSize + batchColumn
+        curRow['input_0'][batchColumn] = sceneColor[row:dataShape + row, column:dataShape + column]
+        curRow['input_1'][batchColumn] = sceneDepth0[row:dataShape + row, column:dataShape + column]
+        curRow['input_2'][batchColumn] = sceneDepth1[row:dataShape + row, column:dataShape + column]
+
+      yield curRow
 
 def ApplyKernel(image, flatKernel) :
   global dataShape
@@ -198,11 +164,9 @@ if (debugSample) :
   fig = plt.figure(figsize=(8,8))
   fig.suptitle(plotTitle, fontsize=16)
 
-  sampleGenerator = MakeGenerator(trainSet, workDirectory, batchSize)
+  sampleGenerator = DataSequence(trainSet, workDirectory, batchSize)
 
-  for i in range(math.floor(sample/batchSize) - 1) :
-    next(sampleGenerator)
-  example = next(sampleGenerator)
+  example = sampleGenerator.__getitem__(math.floor(sample/batchSize))
 
   batchElement = sample%batchSize
 
@@ -234,10 +198,10 @@ x = tf.keras.layers.MaxPooling2D(2,2)(input1)
 x = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(x)
 x = tf.keras.layers.MaxPooling2D(4,4)(x)
 x = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(x)
-x = tf.keras.layers.MaxPooling2D(2,2)(x)
-x = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(x)
+# x = tf.keras.layers.MaxPooling2D(2,2)(x)
+# x = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(x)
 x = tf.keras.layers.Flatten()(x)
-x = tf.keras.layers.Dense(dataShape, activation='relu')(x)
+# x = tf.keras.layers.Dense(dataShape, activation='relu')(x)
 x = tf.keras.Model(inputs=input1, outputs=x)
 
 #Input2
@@ -245,10 +209,10 @@ y = tf.keras.layers.MaxPooling2D(2,2)(input2)
 y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
 y = tf.keras.layers.MaxPooling2D(4,4)(y)
 y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
-y = tf.keras.layers.MaxPooling2D(2,2)(y)
-y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
+# y = tf.keras.layers.MaxPooling2D(2,2)(y)
+# y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
 y = tf.keras.layers.Flatten()(y)
-y = tf.keras.layers.Dense(dataShape, activation='relu')(y)
+# y = tf.keras.layers.Dense(dataShape, activation='relu')(y)
 y = tf.keras.Model(inputs=input2, outputs=y)
 
 #Input3
@@ -256,10 +220,10 @@ z = tf.keras.layers.MaxPooling2D(2,2)(input3)
 z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
 z = tf.keras.layers.MaxPooling2D(4,4)(z)
 z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
-z = tf.keras.layers.MaxPooling2D(2,2)(z)
-z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
-z = tf.keras.layers.Flatten()(z)
-z = tf.keras.layers.Dense(dataShape, activation='relu')(z)
+# z = tf.keras.layers.MaxPooling2D(2,2)(z)
+# z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
+z = tf.keras.layers.Flatten()(z) 
+# z = tf.keras.layers.Dense(dataShape, activation='relu')(z)
 z = tf.keras.Model(inputs=input3, outputs=z)
 
 #Combine inputs
@@ -322,11 +286,9 @@ if (trainModel) :
 
   if (displayData) :
     #-----------------------Display data------------------------#
-    sampleGenerator = MakeGenerator(testSet, workDirectory, batchSize)
+    sampleGenerator = DataSequence(testSet, workDirectory, batchSize)
 
-    for i in range(math.floor(sample/batchSize) - 1) :
-      next(sampleGenerator)
-    example = next(sampleGenerator)
+    example = sampleGenerator.__getitem__(math.floor(sample/batchSize))
     batchElement = sample%batchSize
 
     x = example[batchElement]
@@ -363,26 +325,25 @@ if (trainModel) :
 else :
   model.load_weights(weightsFileName)
 
-
 #--------------------------Test Model--------------------------#
 
-testLoss = model.evaluate_generator(testGenerator)
+testLoss = model.evaluate_generator(testGenerator, steps=math.ceil(testSetSize/batchSize))
 
-sampleGenerator = MakeGenerator(testSet, workDirectory, batchSize)
-for i in range(math.floor(sample/batchSize) - 1) :
-  next(sampleGenerator)
-example = next(sampleGenerator)
+sampleSequence = DataSequence(testSet, workDirectory, batchSize)
+example = sampleSequence.__getitem__(math.floor(sample/batchSize))
 batchElement = sample%batchSize
 
-testPredict = model.predict(example[0], steps=math.ceil(testSetSize/batchSize))
+testPredict = model.predict(example[0])
 
 # Display sample results for debugging purpose
-print("Test color : ", testPredict)
-print("Expected color : ", example[1])
-print("Test loss : ", testLoss)
+# print("Test color : ", testPredict)
+# print("Expected color : ", example[1])
+np.set_printoptions(precision=3, suppress=True)
+print("Error vectors : \n", np.absolute(example[1] - testPredict)[:10])
+print("Test loss : {:.2f}".format(testLoss))
 
 start = perf_counter_ns()
-batchPredict = model.predict_generator(testGenerator)[batchElement]
+batchPredict = model.predict_generator(testGenerator, steps=math.ceil(testSetSize/batchSize))[batchElement]
 end = perf_counter_ns()
 
 print("Time per image: {:.2f}ms ".format((end-start)/testSetSize/1000000.0))
@@ -397,7 +358,6 @@ if testRender:
   render_0SceneColor = np.zeros((frameShape[0] + 2 * padSize, frameShape[1] + 2 * padSize, 3))
   render_0SceneDepth = np.zeros((frameShape[0] + 2 * padSize, frameShape[1] + 2 * padSize, 1))
   render_1SceneDepth = np.zeros((frameShape[0] + 2 * padSize, frameShape[1] + 2 * padSize, 1))
-  render_2SceneDepth = np.zeros((frameShape[0] + 2 * padSize, frameShape[1] + 2 * padSize, 1))
 
   render_0SceneColor[padSize:padSize + frameShape[0], padSize:padSize + frameShape[1]] = \
     (imageio.imread('D:/Bachelor_resources/Capture1/Capture1_SceneColor_0412.png')[:,:,:3]/255.0).astype('float16')
@@ -405,13 +365,12 @@ if testRender:
     (imageio.imread('D:/Bachelor_resources/Capture1/Capture1_SceneDepth_0412.hdr')[:,:,:1]/3000.0).astype('float16')
   render_1SceneDepth[padSize:padSize + frameShape[0], padSize:padSize + frameShape[1]] = \
     (imageio.imread('D:/Bachelor_resources/Capture1/Capture1_SceneDepth_0411.hdr')[:,:,:1]/3000.0).astype('float16')
-  render_2SceneDepth[padSize:padSize + frameShape[0], padSize:padSize + frameShape[1]] = \
-    (imageio.imread('D:/Bachelor_resources/Capture1/Capture1_SceneDepth_0410.hdr')[:,:,:1]/3000.0).astype('float16')
   
-  renderGenerator = MakeRenderGenerator(render_0SceneColor, render_0SceneDepth, render_1SceneDepth, render_2SceneDepth, frameShape)
-  renderedImage = model.predict_generator(renderGenerator, steps=frameShape[0])
+  rowSteps = 4
+  renderGenerator = MakeRenderGenerator(render_0SceneColor, render_0SceneDepth, render_1SceneDepth, frameShape, rowSteps=rowSteps)
+  renderedImage = model.predict_generator(renderGenerator, steps=frameShape[0] * rowSteps)
 
-  finalImage = np.reshape(renderedImage, frameShape)
+  finalImage = np.reshape(renderedImage/255.0, (frameShape[0], frameShape[1], 3))
 
   fig.add_subplot(2, 1, 1)
   plt.imshow(render_0FinalImage)
