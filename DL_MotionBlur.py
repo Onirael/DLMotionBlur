@@ -39,8 +39,8 @@ workDirectory = resourcesFolder  + 'Capture1_Sorted/'
 filePrefix = 'Capture1_'
 
 # Model output
-weightsFileName = resourcesFolder + "3Depth_K201_frameBatch_Weights.h5"
-graphDataFileName = resourcesFolder + "3Depth_K201_frameBatch_GraphData.dat"
+weightsFileName = resourcesFolder + "3Depth_K201_Weights.h5"
+graphDataFileName = resourcesFolder + "3Depth_K201_GraphData.dat"
 
 #------------------------TF session-------------------------#
 
@@ -307,7 +307,7 @@ if (trainModel) :
   epoch_count = range(1, len(training_loss) + 1) # Create count of the number of epochs
 
   with open(graphDataFileName, 'wb') as graphDataFile :
-    pickle.dump((training_loss, test_loss, epoch_count), graphDataFile)
+    pickle.dump((training_loss, test_loss, epoch_count, trainingSetSize), graphDataFile)
 
   if saveFiles :
     model.save_weights(weightsFileName)
@@ -316,10 +316,11 @@ if (trainModel) :
 else :
   model.load_weights(weightsFileName)
   with open(graphDataFileName, 'rb') as graphDataFile :
-    training_loss, test_loss, epoch_count = pickle.load(graphDataFile)
+    training_loss, test_loss, epoch_count, trainingSetSize = pickle.load(graphDataFile)
 
 if (lossGraph) :
   #-----------------Visualize loss history--------------------#
+  plt.title("Training examples : {}".format(trainingSetSize))
   plt.plot(epoch_count, training_loss, 'r--')
   plt.plot(epoch_count, test_loss, 'b-')
   plt.legend(['Training Loss', 'Test Loss'])
