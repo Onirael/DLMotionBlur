@@ -3,6 +3,7 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.keras.optimizers import RMSprop
 from tensorflow.keras.models import load_model
+from tensorflow.keras.callbacks import ModelCheckpoint
 from time import perf_counter_ns
 import os, math, random, imageio, pickle
 import tensorflow.python.util.deprecation as deprecation
@@ -14,9 +15,10 @@ dataShape = 201 # Convolution K size
 
 # Training
 trainModel = True
+trainFromCheckpoint = True
 batchSize = 200
-trainEpochs = 50
-stride = 1
+trainEpochs = 15
+stride = 3
 learningRate = 0.001
 saveFiles = True
 
@@ -31,7 +33,7 @@ sample = 420
 
 # File handling
 digitFormat = 4
-setCount = 20
+setCount = 5
 startFrame = 228
 endFrame = 999
 resourcesFolder = "D:/Bachelor_resources/"
@@ -47,6 +49,10 @@ graphDataFileName = resourcesFolder + "3Depth_K201_GraphData.dat"
 config = tf.compat.v1.ConfigProto()
 config.gpu_options.allow_growth = True
 session = tf.compat.v1.Session(config=config)
+
+#-----------------------Keras Callback----------------------#
+
+trainCheckpoint = ModelCheckpoint(weightsFileName, verbose=0, save_weights_only=True)
 
 #-----------------------Keras Sequence----------------------#
 
@@ -76,11 +82,11 @@ class SampleSequence(tf.keras.utils.Sequence) :
     frameBatch = idx - frameID * self.batchPerFrame                                 # Gets the batch number for the current frame
 
     # Import frames
-    sceneColor = PadImage(imageio.imread(workDirectory + 'SceneColor/' + filePrefix + 'SceneColor_' + GetFrameString(frame, digitFormat) + '.png')[:,:,:3]/255.0, self.sampleSize)
-    sceneDepth0 = PadImage(imageio.imread(workDirectory + 'SceneDepth/' + filePrefix + 'SceneDepth_' + GetFrameString(frame, digitFormat) + '.hdr')[:,:,:1]/3000.0, self.sampleSize)
-    sceneDepth1 = PadImage(imageio.imread(workDirectory + 'SceneDepth/' + filePrefix + 'SceneDepth_' + GetFrameString(frame - 1, digitFormat) + '.hdr')[:,:,:1]/3000.0, self.sampleSize)
-    sceneDepth2 = PadImage(imageio.imread(workDirectory + 'SceneDepth/' + filePrefix + 'SceneDepth_' + GetFrameString(frame - 2, digitFormat) + '.hdr')[:,:,:1]/3000.0, self.sampleSize)
-    finalImage = imageio.imread(workDirectory + 'FinalImage/' + filePrefix + 'FinalImage_' + GetFrameString(frame, digitFormat) + '.png')[:,:,:3]
+    sceneColor = PadImage(imageio.imread(workDirectory + 'SceneColor/' + filePrefix + 'SceneColor_' + GetFrameString(frame, digitFormat) + '.png')[:,:,:3]/255.0, self.sampleSize).astype('float16')
+    sceneDepth0 = PadImage(imageio.imread(workDirectory + 'SceneDepth/' + filePrefix + 'SceneDepth_' + GetFrameString(frame, digitFormat) + '.hdr')[:,:,:1]/3000.0, self.sampleSize).astype('float16')
+    sceneDepth1 = PadImage(imageio.imread(workDirectory + 'SceneDepth/' + filePrefix + 'SceneDepth_' + GetFrameString(frame - 1, digitFormat) + '.hdr')[:,:,:1]/3000.0, self.sampleSize).astype('float16')
+    sceneDepth2 = PadImage(imageio.imread(workDirectory + 'SceneDepth/' + filePrefix + 'SceneDepth_' + GetFrameString(frame - 2, digitFormat) + '.hdr')[:,:,:1]/3000.0, self.sampleSize).astype('float16')
+    finalImage = imageio.imread(workDirectory + 'FinalImage/' + filePrefix + 'FinalImage_' + GetFrameString(frame, digitFormat) + '.png')[:,:,:3].astype('float16')
 
     # Batch arrays
     batch_SceneColor = np.zeros((self.batch_size, dataShape, dataShape, 3))
@@ -166,6 +172,7 @@ def Loss(y_true, y_pred) : # Basic RGB color distance
 
 #-----------------------File handling-----------------------#
 
+np.random.seed(shuffleSeed)
 setDescription = np.random.randint(startFrame, endFrame, setCount) # Contains a random sample of frames to use as a data set
 
 print("\nTotal training examples : {:.2f} Million".format(setCount * 1920 * 1080 /(1000000 * (stride + 1))))
@@ -176,7 +183,6 @@ crossValidSetSize = math.floor(setCount * 0.2)
 testSetSize = math.floor(setCount * 0.2)
 
 # Slice set description to obtain data sets
-np.random.seed(shuffleSeed)
 np.random.shuffle(setDescription)
 trainSet = setDescription[:trainingSetSize]
 crossValidSet = setDescription[trainingSetSize:trainingSetSize + crossValidSetSize]
@@ -249,7 +255,6 @@ x = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(x)
 x = tf.keras.layers.MaxPooling2D(2,2)(x)
 x = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(x)
 x = tf.keras.layers.Flatten()(x)
-# x = tf.keras.layers.Dense(dataShape, activation='relu')(x)
 x = tf.keras.Model(inputs=input1, outputs=x)
 
 #Input2
@@ -260,7 +265,6 @@ y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
 y = tf.keras.layers.MaxPooling2D(2,2)(y)
 y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
 y = tf.keras.layers.Flatten()(y)
-# y = tf.keras.layers.Dense(dataShape, activation='relu')(y)
 y = tf.keras.Model(inputs=input2, outputs=y)
 
 #Input3
@@ -271,7 +275,6 @@ z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
 z = tf.keras.layers.MaxPooling2D(2,2)(z)
 z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
 z = tf.keras.layers.Flatten()(z)
-# z = tf.keras.layers.Dense(dataShape, activation='relu')(z)
 z = tf.keras.Model(inputs=input3, outputs=z)
 
 #Combine inputs
@@ -293,11 +296,15 @@ model.compile(loss=Loss,
 
 model.summary()
 
-if (trainModel) :
+if trainModel :
+  if trainFromCheckpoint :
+    model.load_weights(weightsFileName)
+
   training = model.fit_generator(
     trainGenerator,
     validation_data=crossValidGenerator,
     epochs=trainEpochs,
+    callbacks=[trainCheckpoint]
   )
 
   # Get training and test loss histories
