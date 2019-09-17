@@ -31,7 +31,7 @@ def sampleImage(image, samplePixel, sampleSize) :
         print("invalid image or sample size ")
         return sample
 
-    sample = image[samplePixel[0] - sampleSize - 1:samplePixel[0] + sampleSize, samplePixel[1] - sampleSize - 1:samplePixel[1] + sampleSize]
+    sample = image[samplePixel[0] - sampleSize:samplePixel[0] + sampleSize + 1, samplePixel[1] - sampleSize:samplePixel[1] + sampleSize + 1]
 
     return sample
 

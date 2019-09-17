@@ -4,34 +4,43 @@ import tensorflow as tf
 from tensorflow.keras.optimizers import RMSprop
 from tensorflow.keras.models import load_model
 from time import perf_counter_ns
-import os, math, random, imageio
+import os, math, random, imageio, pickle
 import tensorflow.python.util.deprecation as deprecation
 deprecation._PRINT_DEPRECATION_WARNINGS = False
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 os.environ['TF_ENABLE_AUTO_MIXED_PRECISION'] = '1'
 
-dataShape = 201
-digitFormat = 5
-batchSize = 100
-useAllExamples = False
-usedExamples = 10000
-debugSample = False
-sample = 150
-shuffleSeed = 42
-randomSample = True
-trainModel = True
-trainEpochs = 50
-saveFiles = True
-modelFromFile = True
-displayData = False
-lossGraph = True
-resourcesFolder = "D:/Bachelor_resources/"
-testRender = False
-weightsFileName = resourcesFolder + "3Depth_0_Weights.h5"
-modelFileName = resourcesFolder + "3Depth_0_Model.h5"
+dataShape = 201 # Convolution K size
 
-workDirectory = resourcesFolder  + 'samples3_Capture1/'
+# Training
+trainModel = True
+batchSize = 200
+trainEpochs = 50
+stride = 1
+learningRate = 0.001
+saveFiles = True
+
+shuffleSeed = 42
+
+# Debug & Visualization
+lossGraph = True
+testRender = False
+debugSample = False
+randomSample = True
+sample = 420
+
+# File handling
+digitFormat = 4
+setCount = 20
+startFrame = 228
+endFrame = 999
+resourcesFolder = "D:/Bachelor_resources/"
+workDirectory = resourcesFolder  + 'Capture1_Sorted/'
 filePrefix = 'Capture1_'
+
+# Model output
+weightsFileName = resourcesFolder + "3Depth_K201_frameBatch_Weights.h5"
+graphDataFileName = resourcesFolder + "3Depth_K201_frameBatch_GraphData.dat"
 
 #------------------------TF session-------------------------#
 
@@ -41,88 +50,87 @@ session = tf.compat.v1.Session(config=config)
 
 #-----------------------Keras Sequence----------------------#
 
-class DataSequence(tf.keras.utils.Sequence) :
+class SampleSequence(tf.keras.utils.Sequence) :
+  def __init__(self, batch_size, frames, stride=0) :
+    global dataShape
+    sceneDepth0 = imageio.imread(workDirectory + 'SceneDepth/' + filePrefix + 'SceneDepth_' + GetFrameString(frames[0], digitFormat) + '.hdr') # Test image for shape
 
-  def __init__(self, indexArray, directory, batch_size, verbose=False) :
+    self.frameShape = sceneDepth0.shape
+    self.sampleSize = (dataShape - 1)//2                                                            # "Padding" of the convolution kernel
     self.batch_size = batch_size
-    self.directory = directory
-    self.indexArray = indexArray
-    self.verbose = verbose
-    self.arrayLen = len(indexArray)
-    self.batchAmount = math.ceil(self.arrayLen/self.batch_size)
+    self.batchPerFrame = (self.frameShape[0] * self.frameShape[1] // (batch_size * (stride + 1)))   # Number of batches per input frames
+    self.batchAmount = len(frames) * self.batchPerFrame                                             # Total number of batches
+    self.frames = frames                                                                            # List of input frame numbers
+    self.stride = stride                                                                            # Pixels to skip when reading file
 
   def __len__(self) :
     return self.batchAmount
   
   def __getitem__(self, idx) :
     global dataShape
-    global digitFormat
     global filePrefix
+    global digitFormat
 
+    frameID = idx//self.batchPerFrame                                               # Gets the ID of the current frame
+    frame = self.frames[frameID]                                                    # Gets the input frame number
+    frameBatch = idx - frameID * self.batchPerFrame                                 # Gets the batch number for the current frame
+
+    # Import frames
+    sceneColor = PadImage(imageio.imread(workDirectory + 'SceneColor/' + filePrefix + 'SceneColor_' + GetFrameString(frame, digitFormat) + '.png')[:,:,:3]/255.0, self.sampleSize)
+    sceneDepth0 = PadImage(imageio.imread(workDirectory + 'SceneDepth/' + filePrefix + 'SceneDepth_' + GetFrameString(frame, digitFormat) + '.hdr')[:,:,:1]/3000.0, self.sampleSize)
+    sceneDepth1 = PadImage(imageio.imread(workDirectory + 'SceneDepth/' + filePrefix + 'SceneDepth_' + GetFrameString(frame - 1, digitFormat) + '.hdr')[:,:,:1]/3000.0, self.sampleSize)
+    sceneDepth2 = PadImage(imageio.imread(workDirectory + 'SceneDepth/' + filePrefix + 'SceneDepth_' + GetFrameString(frame - 2, digitFormat) + '.hdr')[:,:,:1]/3000.0, self.sampleSize)
+    finalImage = imageio.imread(workDirectory + 'FinalImage/' + filePrefix + 'FinalImage_' + GetFrameString(frame, digitFormat) + '.png')[:,:,:3]
+
+    # Batch arrays
     batch_SceneColor = np.zeros((self.batch_size, dataShape, dataShape, 3))
     batch_SceneDepth0 = np.zeros((self.batch_size, dataShape, dataShape, 1))
     batch_SceneDepth1 = np.zeros((self.batch_size, dataShape, dataShape, 1))
     batch_SceneDepth2 = np.zeros((self.batch_size, dataShape, dataShape, 1))
     batch_FinalImage = np.zeros((self.batch_size, 3))
 
-    if self.verbose :
-      print("\nImporting Batch {}".format(idx))
+    for element in range(self.batch_size) :
+      i = (element + frameBatch * self.batch_size) * (self.stride + 1)                          # Gets the pixel ID for the current frame
+      pixel = (i%self.frameShape[0] + self.sampleSize, i//self.frameShape[1] + self.sampleSize) # Gets the pixel coordinates
 
-    for index in range(self.batch_size) :
-      if (index + self.batch_size * idx >= self.arrayLen) :
-        frame = self.indexArray[index]
-      else :
-        frame = self.indexArray[index + self.batch_size * idx]
-
-      frameString = str(frame)
-      if (len(frameString) < digitFormat) :
-        frameString = (digitFormat - len(frameString)) * "0" + frameString
-
-      batch_SceneColor[index] = (imageio.imread(self.directory + 'Input/' + filePrefix + '0SceneColor_' + frameString + '.png')[:,:,:3]/255.0).astype('float16')
-      batch_SceneDepth0[index] = (imageio.imread(self.directory + 'Input/' + filePrefix + '0SceneDepth_' + frameString + '.hdr')[:,:,:1]/3000.0).astype('float16')
-      batch_SceneDepth1[index] = (imageio.imread(self.directory + 'Input/' + filePrefix + '1SceneDepth_' + frameString + '.hdr')[:,:,:1]/3000.0).astype('float16')
-      batch_SceneDepth2[index] = (imageio.imread(self.directory + 'Input/' + filePrefix + '2SceneDepth_' + frameString + '.hdr')[:,:,:1]/3000.0).astype('float16')
-      batch_FinalImage[index] = (imageio.imread(self.directory + 'Output/' + filePrefix + '0FinalImage_' + frameString + '.png')[0,0,:3]).astype('float16')
-
+      # Array assignment
+      batch_SceneColor[element] = SampleImage(sceneColor, pixel, self.sampleSize)
+      batch_SceneDepth0[element] = SampleImage(sceneDepth0, pixel, self.sampleSize)
+      batch_SceneDepth1[element] = SampleImage(sceneDepth1, pixel, self.sampleSize)
+      batch_SceneDepth2[element] = SampleImage(sceneDepth2, pixel, self.sampleSize)
+      batch_FinalImage[element] = finalImage[i%self.frameShape[0], i//self.frameShape[1]]
+        
     return ({'input_0':batch_SceneColor, 'input_1':batch_SceneDepth0, 'input_2':batch_SceneDepth1, 'input_3':batch_SceneDepth2}, batch_FinalImage)
-
 
 #-------------------------Functions-------------------------#
 
-def MakeGenerator(indexArray, directory, batch_size, verbose=False) :
-  global filePrefix
-  global dataShape
-  
-  arrayLen = len(indexArray)
-  batchAmount = math.ceil(arrayLen/batch_size)
-  while True :
-    for batch in range(batchAmount) :
-      batch_SceneColor = np.zeros((batch_size, dataShape, dataShape, 3))
-      batch_SceneDepth0 = np.zeros((batch_size, dataShape, dataShape, 1))
-      batch_SceneDepth1 = np.zeros((batch_size, dataShape, dataShape, 1))
-      batch_SceneDepth2 = np.zeros((batch_size, dataShape, dataShape, 1))
-      batch_FinalImage = np.zeros((batch_size, 3))
+def GetFrameString(frameNumber, digitFormat) : # Returns a string of the frame number with the correct amount of digits
+  if math.log(frameNumber, 10) > digitFormat :
+    raise ValueError("Digit format is too small for the frame number, {} for frame number {}".format(digitFormat, frameNumber))
 
-      if verbose :
-        print("\nImporting Batch {}".format(batch))
+  frameString = str(frameNumber)
+  if (len(frameString) < digitFormat) :
+    frameString = (digitFormat - len(frameString)) * "0" + frameString
 
-      for index in range(batch_size) :
-        if (index + batch_size * batch >= arrayLen) :
-          frame = indexArray[index]
-        else :
-          frame = indexArray[index + batch_size * batch]
+  return frameString
 
-        frameString = str(frame)
-        if (len(frameString) < digitFormat) :
-          frameString = (digitFormat - len(frameString)) * "0" + frameString
+def SampleImage(image, samplePixel, sampleSize) :
+  shape = image.shape
+  sample = np.array([])
 
-        batch_SceneColor[index] = (imageio.imread(directory + 'Input/' + filePrefix + '0SceneColor_' + frameString + '.png')[:,:,:3]/255.0).astype('float16')
-        batch_SceneDepth0[index] = (imageio.imread(directory + 'Input/' + filePrefix + '0SceneDepth_' + frameString + '.hdr')[:,:,:1]/3000.0).astype('float16')
-        batch_SceneDepth1[index] = (imageio.imread(directory + 'Input/' + filePrefix + '1SceneDepth_' + frameString + '.hdr')[:,:,:1]/3000.0).astype('float16')
-        batch_SceneDepth2[index] = (imageio.imread(directory + 'Input/' + filePrefix + '2SceneDepth_' + frameString + '.hdr')[:,:,:1]/3000.0).astype('float16')
-        batch_FinalImage[index] = (imageio.imread(directory + 'Output/' + filePrefix + '0FinalImage_' + frameString + '.png')[0,0,:3]).astype('float16')
+  if (max(shape) < 2*sampleSize + 1) :
+        print("invalid image or sample size ")
+        return sample
 
-      yield ({'input_0':batch_SceneColor, 'input_1':batch_SceneDepth0, 'input_2':batch_SceneDepth1, 'input_3':batch_SceneDepth2}, batch_FinalImage)
+  sample = image[samplePixel[0] - sampleSize:samplePixel[0] + sampleSize + 1, samplePixel[1] - sampleSize:samplePixel[1] + sampleSize + 1]
+
+  return sample
+
+def PadImage(image, sampleSize) : # Returns the image with a sampleSize large padding of zeros
+  paddedImage = np.zeros((image.shape[0] + 2 * sampleSize, image.shape[1] + 2 * sampleSize, image.shape[2]))
+  paddedImage[sampleSize:image.shape[0] + sampleSize, sampleSize:image.shape[1] + sampleSize] = image
+
+  return paddedImage
 
 def MakeRenderGenerator(sceneColor, sceneDepth0, sceneDepth1, sceneDepth2, frameShape, verbose=True) :
 
@@ -146,77 +154,81 @@ def MakeRenderGenerator(sceneColor, sceneDepth0, sceneDepth1, sceneDepth2, frame
     
     yield curRow
 
-def ApplyKernel(image, flatKernel) :
+def ApplyKernel(image, flatKernel) : # Applies convolution kernel to same shaped image
   global dataShape
   kernel = tf.reshape(flatKernel, [tf.shape(flatKernel)[0], dataShape, dataShape])
 
   return tf.einsum('hij,hijk->hk', kernel, image)
 
-def Loss(y_true, y_pred) :    # Nested function definition
+def Loss(y_true, y_pred) : # Basic RGB color distance
   delta = tf.reduce_mean(tf.abs(y_true - y_pred), axis=1)
   return delta
 
 #-----------------------File handling-----------------------#
 
-if useAllExamples :
-  setCount = len(os.listdir(workDirectory + "Output"))
-  setDescription = np.arange(0, setCount)
-else :
-  setCount = usedExamples
-  # fileCount = len(os.listdir(workDirectory + "Output")) # Only take n first examples while examples are being created
-  # setDescription = np.random.choice(fileCount, setCount, replace=False)
-  setDescription = np.arange(0, setCount)
+setDescription = np.random.randint(startFrame, endFrame, setCount) # Contains a random sample of frames to use as a data set
 
-print("Total training examples : " + str(setCount) + "\n")
+print("\nTotal training examples : {:.2f} Million".format(setCount * 1920 * 1080 /(1000000 * (stride + 1))))
 
+# Data sets sizes
 trainingSetSize = math.floor(setCount * 0.6)
 crossValidSetSize = math.floor(setCount * 0.2)
 testSetSize = math.floor(setCount * 0.2)
 
+# Slice set description to obtain data sets
 np.random.seed(shuffleSeed)
 np.random.shuffle(setDescription)
 trainSet = setDescription[:trainingSetSize]
 crossValidSet = setDescription[trainingSetSize:trainingSetSize + crossValidSetSize]
 testSet = setDescription[trainingSetSize + crossValidSetSize:]
 
-trainGenerator = DataSequence(trainSet, workDirectory, batchSize, verbose=False)
-crossValidGenerator = DataSequence(crossValidSet, workDirectory, batchSize)
-testGenerator = DataSequence(testSet, workDirectory, batchSize)
+#Create generators
+trainGenerator = SampleSequence(batchSize, trainSet, stride=stride)
+crossValidGenerator = SampleSequence(batchSize, crossValidSet, stride=stride)
+testGenerator = SampleSequence(batchSize, testSet, stride=stride)
 
-print("\nTraining set size : ", trainingSetSize)
-print("Cross validation set size : ", crossValidSetSize)
-print("Test set size : ", testSetSize)
+print("\nTraining set size : {:.2f} Million".format(trainingSetSize * 1920 * 1080 /(1000000 * (stride + 1))))
+print("Cross validation set size : {:.2f} Million".format(crossValidSetSize * 1920 * 1080 /(1000000 * (stride + 1))))
+print("Test set size : {:.2f} Million".format(testSetSize * 1920 * 1080 /(1000000 * (stride + 1))))
 print()
+
 
 #-------------------------Debug-----------------------------#
 
 if (debugSample) :
-  if (randomSample) :
-    sample = random.randint(0, len(trainSet))
-  plotTitle = "Sample " + str(trainSet[sample])
+  sampleGenerator = SampleSequence(batchSize, testSet)
+
+  dataExample = sampleGenerator.__getitem__(0)[0]['input_0'][0]
+  frameShape = dataExample.shape
+
+  batchPerFrame = (frameShape[0] * frameShape[1])//batchSize
+  if randomSample :
+    testFrame = random.randint(0, len(testSet) - 1)
+    testBatch = random.randint(0, batchPerFrame)
+    testElement = random.randint(0, batchSize)
+  else :
+    testFrame = sample
+    testBatch = random.randint(0, batchPerFrame)
+    testElement = random.randint(0, batchSize)
+
+  plotTitle = "Frame {} sample {}".format(testSet[testFrame], testBatch * batchSize + testElement)
 
   fig = plt.figure(figsize=(8,8))
   fig.suptitle(plotTitle, fontsize=16)
 
-  sampleGenerator = MakeGenerator(trainSet, workDirectory, batchSize)
-
-  for i in range(math.floor(sample/batchSize) - 1) :
-    next(sampleGenerator)
-  example = next(sampleGenerator)
-
-  batchElement = sample%batchSize
+  example = sampleGenerator.__getitem__(testFrame * batchPerFrame + testBatch)
 
   fig.add_subplot(2, 2, 1)
-  plt.imshow(example[0]['input_0'][batchElement])
+  plt.imshow(example[0]['input_0'][testElement])
   fig.add_subplot(2, 2, 2)
-  plt.imshow(example[0]['input_1'][batchElement,:,:,0], cmap='gray')
+  plt.imshow(example[0]['input_1'][testElement,:,:,0], cmap='gray')
   fig.add_subplot(2, 2, 3)
-  plt.imshow(example[0]['input_2'][batchElement,:,:,0], cmap='gray')
+  plt.imshow(example[0]['input_2'][testElement,:,:,0], cmap='gray')
   fig.add_subplot(2, 2, 4)
-  plt.imshow(example[1][batchElement]/255.0)
+  plt.imshow(example[1][testElement, np.newaxis, np.newaxis]/255.0)
 
 
-  print("Max depth : ", np.amax(example[0]['input_1'][batchElement]))
+  print("Max depth : ", np.amax(example[0]['input_1'][testElement]))
   plt.show()
   quit()
 
@@ -237,7 +249,7 @@ x = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(x)
 x = tf.keras.layers.MaxPooling2D(2,2)(x)
 x = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(x)
 x = tf.keras.layers.Flatten()(x)
-x = tf.keras.layers.Dense(dataShape, activation='relu')(x)
+# x = tf.keras.layers.Dense(dataShape, activation='relu')(x)
 x = tf.keras.Model(inputs=input1, outputs=x)
 
 #Input2
@@ -248,7 +260,7 @@ y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
 y = tf.keras.layers.MaxPooling2D(2,2)(y)
 y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
 y = tf.keras.layers.Flatten()(y)
-y = tf.keras.layers.Dense(dataShape, activation='relu')(y)
+# y = tf.keras.layers.Dense(dataShape, activation='relu')(y)
 y = tf.keras.Model(inputs=input2, outputs=y)
 
 #Input3
@@ -259,15 +271,16 @@ z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
 z = tf.keras.layers.MaxPooling2D(2,2)(z)
 z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
 z = tf.keras.layers.Flatten()(z)
-z = tf.keras.layers.Dense(dataShape, activation='relu')(z)
+# z = tf.keras.layers.Dense(dataShape, activation='relu')(z)
 z = tf.keras.Model(inputs=input3, outputs=z)
 
 #Combine inputs
 combined = tf.keras.layers.concatenate([x.output, y.output, z.output])
 
 #Common network
-n = tf.keras.layers.Dense(64, activation='relu')(combined)
+n = tf.keras.layers.Dense(128, activation='relu')(combined)
 n = tf.keras.layers.Dense(dataShape**2, activation='linear')(n)
+n = tf.keras.layers.ReLU()(n)
 n = tf.keras.layers.Lambda(lambda l: ApplyKernel(input0, l))(n)
 
 #Model
@@ -276,10 +289,7 @@ model = tf.keras.Model(inputs=[input0, x.input, y.input, z.input], outputs=n)
 #--------------------------------#
 
 model.compile(loss=Loss, 
-  optimizer=RMSprop(lr=0.001))
-
-# Save layer names for plotting
-layer_names = [layer.name for layer in model.layers]
+  optimizer=RMSprop(lr=learningRate))
 
 model.summary()
 
@@ -287,10 +297,7 @@ if (trainModel) :
   training = model.fit_generator(
     trainGenerator,
     validation_data=crossValidGenerator,
-    validation_steps=math.ceil(testSetSize/batchSize),
     epochs=trainEpochs,
-    steps_per_epoch=math.ceil(trainingSetSize/batchSize),
-    # use_multiprocessing=True
   )
 
   # Get training and test loss histories
@@ -299,82 +306,50 @@ if (trainModel) :
 
   epoch_count = range(1, len(training_loss) + 1) # Create count of the number of epochs
 
+  with open(graphDataFileName, 'wb') as graphDataFile :
+    pickle.dump((training_loss, test_loss, epoch_count), graphDataFile)
+
   if saveFiles :
     model.save_weights(weightsFileName)
     print("Saved weights to file")
 
-    # model.save(modelFileName)
-    # print("Saved model to file")
-
-  if (lossGraph) :
-    #-----------------Visualize loss history--------------------#
-
-    plt.plot(epoch_count, training_loss, 'r--')
-    plt.plot(epoch_count, test_loss, 'b-')
-    plt.legend(['Training Loss', 'Test Loss'])
-    plt.xlabel('Epoch')
-    plt.xlim(0, len(training_loss))
-    plt.ylabel('Loss')
-    plt.ylim(0, 70)
-    plt.show()
-
-#--------------------------------------------------------------#
-
-  if (displayData) :
-    #-----------------------Display data------------------------#
-    sampleGenerator = MakeGenerator(testSet, workDirectory, batchSize)
-
-    for i in range(math.floor(sample/batchSize) - 1) :
-      next(sampleGenerator)
-    example = next(sampleGenerator)
-    batchElement = sample%batchSize
-
-    x = example[batchElement]
-
-    layer_outputs = [layer.output for layer in model.layers[2:8]]
-    activation_model = tf.keras.models.Model(inputs=model.input, outputs=layer_outputs)
-
-    activation_model.summary()
-    activations = activation_model.predict(x)
-
-    fig = plt.figure(figsize=(8,8))
-
-    for layer in activations :
-      print(layer.shape)
-
-    fig.add_subplot(6, 16, 1)
-    imShape = activations[0][0].shape
-    plt.imshow(np.reshape(activations[0][0], (imShape[0], imShape[1])), cmap='gray')
-    fig.add_subplot(6, 16, 17)
-    imShape = activations[1][0].shape
-    plt.imshow(np.reshape(activations[1][0], (imShape[0], imShape[1])), cmap='gray')
-
-    print("Activation length: ", len(activations))
-    for j in range(4) :
-      for i in range(16) :
-        fig.add_subplot(6, 16, 32 + j * 16 + i + 1)
-        imShape = activations[j + 2].shape
-        plt.imshow(np.reshape(activations[j + 2][:,:,:,i], (imShape[1], imShape[2])), cmap='gray')
-
-    plt.show()
-
-    #-----------------------------------------------------------#
-
 else :
   model.load_weights(weightsFileName)
+  with open(graphDataFileName, 'rb') as graphDataFile :
+    training_loss, test_loss, epoch_count = pickle.load(graphDataFile)
 
+if (lossGraph) :
+  #-----------------Visualize loss history--------------------#
+  plt.plot(epoch_count, training_loss, 'r--')
+  plt.plot(epoch_count, test_loss, 'b-')
+  plt.legend(['Training Loss', 'Test Loss'])
+  plt.xlabel('Epoch')
+  plt.xlim(0, len(training_loss))
+  plt.ylabel('Loss')
+  plt.ylim(0, 70)
+  plt.show()
 
 #--------------------------Test Model--------------------------#
 
-testLoss = model.evaluate_generator(testGenerator)
+sampleGenerator = SampleSequence(batchSize, testSet)
 
-sampleGenerator = MakeGenerator(testSet, workDirectory, batchSize)
-for i in range(math.floor(sample/batchSize) - 1) :
-  next(sampleGenerator)
-example = next(sampleGenerator)
-batchElement = sample%batchSize
+dataExample = sampleGenerator.__getitem__(0)[0]['input_0'][0]
+frameShape = dataExample.shape
+
+batchPerFrame = (frameShape[0] * frameShape[1])//batchSize
+if randomSample :
+  testFrame = random.randint(0, len(testSet))
+  testBatch = random.randint(0, batchPerFrame)
+  testElement = random.randint(0, batchSize)
+else :
+  testFrame = sample
+  testBatch = random.randint(0, batchPerFrame)
+  testElement = random.randint(0, batchSize)
+
+example = sampleGenerator.__getitem__(testFrame * batchPerFrame + testBatch)[testElement]
 
 testPredict = model.predict(example[0], steps=math.ceil(testSetSize/batchSize))
+testLoss = model.evaluate_generator(testGenerator)
 
 # Display sample results for debugging purpose
 print("Test color : ", testPredict)
@@ -382,10 +357,12 @@ print("Expected color : ", example[1])
 print("Test loss : ", testLoss)
 
 start = perf_counter_ns()
-batchPredict = model.predict_generator(testGenerator)[batchElement]
+batchPredict = model.predict_generator(testGenerator)[testElement]
 end = perf_counter_ns()
 
 print("Time per image: {:.2f}ms ".format((end-start)/testSetSize/1000000.0))
+
+#-------------------------Test Render--------------------------#
 
 if testRender:
   fig = plt.figure(figsize=(8,8))
@@ -420,3 +397,5 @@ if testRender:
   plt.imshow(finalImage)
 
   plt.show()
+
+#--------------------------------------------------------------#
