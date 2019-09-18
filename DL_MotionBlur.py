@@ -11,14 +11,14 @@ deprecation._PRINT_DEPRECATION_WARNINGS = False
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 os.environ['TF_ENABLE_AUTO_MIXED_PRECISION'] = '1'
 
-dataShape = 201 # Convolution K size
+dataShape = 51 # Convolution K size
 
 # Training
 trainModel = True
-trainFromCheckpoint = True
+trainFromCheckpoint = False
 batchSize = 200
-trainEpochs = 15
-stride = 3
+trainEpochs = 20
+stride = 39
 learningRate = 0.001
 saveFiles = True
 
@@ -33,7 +33,7 @@ sample = 420
 
 # File handling
 digitFormat = 4
-setCount = 5
+setCount = 20
 startFrame = 228
 endFrame = 999
 resourcesFolder = "D:/Bachelor_resources/"
@@ -41,8 +41,8 @@ workDirectory = resourcesFolder  + 'Capture1_Sorted/'
 filePrefix = 'Capture1_'
 
 # Model output
-weightsFileName = resourcesFolder + "3Depth_K201_Weights.h5"
-graphDataFileName = resourcesFolder + "3Depth_K201_GraphData.dat"
+weightsFileName = resourcesFolder + "3Depth_K51_M620k_Weights.h5"
+graphDataFileName = resourcesFolder + "3Depth_K51_M620k_GraphData.dat"
 
 #------------------------TF session-------------------------#
 
@@ -250,20 +250,20 @@ input3 = tf.keras.Input(shape=(dataShape, dataShape, 1), name='input_3') #Depth 
 #Input1
 x = tf.keras.layers.MaxPooling2D(2,2)(input1)
 x = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(x)
-x = tf.keras.layers.MaxPooling2D(4,4)(x)
-x = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(x)
 x = tf.keras.layers.MaxPooling2D(2,2)(x)
 x = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(x)
+# x = tf.keras.layers.MaxPooling2D(2,2)(x)
+# x = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(x)
 x = tf.keras.layers.Flatten()(x)
 x = tf.keras.Model(inputs=input1, outputs=x)
 
 #Input2
 y = tf.keras.layers.MaxPooling2D(2,2)(input2)
 y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
-y = tf.keras.layers.MaxPooling2D(4,4)(y)
-y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
 y = tf.keras.layers.MaxPooling2D(2,2)(y)
 y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
+# y = tf.keras.layers.MaxPooling2D(2,2)(y)
+# y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
 y = tf.keras.layers.Flatten()(y)
 y = tf.keras.Model(inputs=input2, outputs=y)
 
@@ -272,8 +272,8 @@ z = tf.keras.layers.MaxPooling2D(2,2)(input3)
 z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
 z = tf.keras.layers.MaxPooling2D(4,4)(z)
 z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
-z = tf.keras.layers.MaxPooling2D(2,2)(z)
-z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
+# z = tf.keras.layers.MaxPooling2D(2,2)(z)
+# z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
 z = tf.keras.layers.Flatten()(z)
 z = tf.keras.Model(inputs=input3, outputs=z)
 
