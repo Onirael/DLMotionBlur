@@ -11,7 +11,7 @@ deprecation._PRINT_DEPRECATION_WARNINGS = False
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 os.environ['TF_ENABLE_AUTO_MIXED_PRECISION'] = '1'
 
-dataShape = 51 # Convolution K size
+dataShape = 71 # Convolution K size
 
 # Training
 trainModel = True
@@ -41,8 +41,8 @@ workDirectory = resourcesFolder  + 'Capture1_Sorted/'
 filePrefix = 'Capture1_'
 
 # Model output
-weightsFileName = resourcesFolder + "3Depth_K51_M620k_Weights.h5"
-graphDataFileName = resourcesFolder + "3Depth_K51_M620k_GraphData.dat"
+weightsFileName = resourcesFolder + "3Depth_K71_M620k_Weights.h5"
+graphDataFileName = resourcesFolder + "3Depth_K71_M620k_GraphData.dat"
 
 #------------------------TF session-------------------------#
 
@@ -250,7 +250,7 @@ input3 = tf.keras.Input(shape=(dataShape, dataShape, 1), name='input_3') #Depth 
 #Input1
 x = tf.keras.layers.MaxPooling2D(2,2)(input1)
 x = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(x)
-x = tf.keras.layers.MaxPooling2D(2,2)(x)
+x = tf.keras.layers.MaxPooling2D(4,4)(x)
 x = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(x)
 # x = tf.keras.layers.MaxPooling2D(2,2)(x)
 # x = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(x)
@@ -260,7 +260,7 @@ x = tf.keras.Model(inputs=input1, outputs=x)
 #Input2
 y = tf.keras.layers.MaxPooling2D(2,2)(input2)
 y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
-y = tf.keras.layers.MaxPooling2D(2,2)(y)
+y = tf.keras.layers.MaxPooling2D(4,4)(y)
 y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
 # y = tf.keras.layers.MaxPooling2D(2,2)(y)
 # y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
