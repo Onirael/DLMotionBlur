@@ -270,7 +270,7 @@ y = tf.keras.Model(inputs=input2, outputs=y)
 #Input3
 z = tf.keras.layers.MaxPooling2D(2,2)(input3)
 z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
-z = tf.keras.layers.MaxPooling2D(4,4)(z)
+z = tf.keras.layers.MaxPooling2D(2,2)(z)
 z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
 # z = tf.keras.layers.MaxPooling2D(2,2)(z)
 # z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
