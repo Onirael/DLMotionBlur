@@ -14,7 +14,7 @@ os.environ['TF_ENABLE_AUTO_MIXED_PRECISION'] = '1'
 dataShape = 201 # Convolution K size
 
 # Training
-trainModel = True
+trainModel = False
 modelFromFile = False
 trainFromCheckpoint = True
 batchSize = 200
@@ -42,8 +42,9 @@ workDirectory = resourcesFolder  + 'Capture1_Sorted/'
 filePrefix = 'Capture1_'
 
 # Model output
-weightsFileName = resourcesFolder + "3Depth_K201_Weights.h5"
-graphDataFileName = resourcesFolder + "3Depth_K201_GraphData.dat"
+modelName = "3Depth_K201"
+weightsFileName = resourcesFolder + modelName + "_Weights.h5"
+graphDataFileName = resourcesFolder + modelName + "_GraphData.dat"
 
 #------------------------TF session-------------------------#
 
@@ -58,7 +59,7 @@ trainCheckpoint = ModelCheckpoint(weightsFileName, verbose=0, save_weights_only=
 #-----------------------Keras Sequence----------------------#
 
 class SampleSequence(tf.keras.utils.Sequence) :
-  def __init__(self, batch_size, frames, frameShape, sampleMaps, stride=0) :
+  def __init__(self, batch_size, frames, frameShape, sampleMaps, stride=1) :
     global dataShape
 
     self.frameShape = frameShape
@@ -207,9 +208,12 @@ crossValidSetFraction = 0.2
 testSetFraction = 0.2
 
 #Create generators
-trainGenerator = SampleSequence(batchSize, setDescription, frameShape, GetSampleMaps(frameShape, setDescription, shuffleSeed), stride=stride//trainSetFraction)
-crossValidGenerator = SampleSequence(batchSize, setDescription, frameShape, GetSampleMaps(frameShape, setDescription, shuffleSeed + 10), stride=int(stride//crossValidSetFraction))
-testGenerator = SampleSequence(batchSize, setDescription, frameShape, GetSampleMaps(frameShape, setDescription, shuffleSeed + 20), stride=int(stride//testSetFraction))
+trainGenerator = SampleSequence(batchSize, setDescription, frameShape, \
+  GetSampleMaps(frameShape, setDescription, shuffleSeed), stride=stride//trainSetFraction)
+crossValidGenerator = SampleSequence(batchSize, setDescription, frameShape, \
+  GetSampleMaps(frameShape, setDescription, shuffleSeed + 10), stride=int(stride//crossValidSetFraction))
+testGenerator = SampleSequence(batchSize, setDescription, frameShape, \
+  GetSampleMaps(frameShape, setDescription, shuffleSeed + 20), stride=int(stride//testSetFraction))
 
 print("\nTraining set size : {:.2f} Million".format(examplesDisplayCount * trainSetFraction))
 print("Cross validation set size : {:.2f} Million".format(examplesDisplayCount * crossValidSetFraction))
@@ -267,11 +271,10 @@ input3 = tf.keras.Input(shape=(dataShape, dataShape, 1), name='input_3', dtype='
 
 if modelFromFile :
   # load json and create model
-  json_file = open(resourcesFolder + 'modelTest.json', 'r')
-  loaded_model_json = json_file.read()
-  json_file.close()
-  model = tf.keras.models.model_from_json(loaded_model_json, custom_objects={'input_0' : input0, 'input_1' : input1, 'input_2' : input2, 'input_3' : input3})
-  # model = load_model(resourcesFolder + "modelTest.h5", custom_objects={'Loss':Loss})
+  with open(resourcesFolder + modelName + '.json', 'r') as json_file :
+    loaded_model_json = json_file.read()
+
+  model = tf.keras.models.model_from_json(loaded_model_json)
   print("Loaded model from disk")
 
 else :
@@ -317,7 +320,7 @@ else :
   n = tf.keras.layers.Lambda(lambda l: ApplyKernel(input0, l))(n)
 
   #Model
-  model = tf.keras.Model(inputs=[input0, x.input, y.input, z.input], outputs=n)
+  model = tf.keras.Model(inputs=[input0, x.input, y.input, z.input], outputs=n, name=modelName)
 
   #--------------------------------#
 
@@ -326,19 +329,13 @@ model.compile(loss=Loss,
 
 tf.keras.backend.set_epsilon(1e-8)
 
-# model2.compile(loss=Loss,
-#   optimizer=RMSprop(lr=learningRate))
-
 model.summary()
 
 if not modelFromFile :
   # serialize model to JSON
   model_json = model.to_json()
-  with open(resourcesFolder + "modelTest.json", "w") as json_file:
+  with open(resourcesFolder + modelName + ".json", "w") as json_file:
       json_file.write(model_json)
-  # model.save(resourcesFolder + "modelTest.h5")
-  # del model
-  # model = load_model(resourcesFolder + "modelTest.h5", custom_objects={'Loss':Loss})
   
   print("Saved model to disk")
 
@@ -386,24 +383,24 @@ if (lossGraph) :
 
 #--------------------------Test Model--------------------------#
 
-sampleGenerator = SampleSequence(batchSize, testSet)
+sampleGenerator = SampleSequence(batchSize, np.arange(startFrame, endFrame), frameShape, GetSampleMaps(frameShape, setDescription, shuffleSeed))
 
-dataExample = sampleGenerator.__getitem__(0)['input_0'][0]
+dataExample = sampleGenerator.__getitem__(0)[0]['input_0'][0]
 frameShape = dataExample.shape
 
 batchPerFrame = (frameShape[0] * frameShape[1])//batchSize
 if randomSample :
-  testFrame = random.randint(0, len(testSet))
+  testFrame = random.randint(startFrame, endFrame)
   testBatch = random.randint(0, batchPerFrame)
   testElement = random.randint(0, batchSize)
 else :
-  testFrame = sample
+  testFrame = sample - startFrame
   testBatch = random.randint(0, batchPerFrame)
   testElement = random.randint(0, batchSize)
 
 example = sampleGenerator.__getitem__(testFrame * batchPerFrame + testBatch)
 
-testPredict = model.predict(example[0], steps=math.ceil(testSetSize/batchSize))
+testPredict = model.predict(example[0])
 testLoss = model.evaluate_generator(testGenerator)
 
 # Display sample results for debugging purpose
@@ -415,7 +412,7 @@ start = perf_counter_ns()
 batchPredict = model.predict_generator(testGenerator)[testElement]
 end = perf_counter_ns()
 
-print("Time per image: {:.2f}ms ".format((end-start)/testSetSize/1000000.0))
+print("Time per image: {:.2f}ms ".format((end-start)/(examplesCount*testSetFraction)/1000000.0))
 
 #-------------------------Test Render--------------------------#
 
@@ -443,6 +440,7 @@ if testRender:
   renderGenerator = MakeRenderGenerator(render_0SceneColor, render_0SceneDepth, render_1SceneDepth, render_2SceneDepth, frameShape)
   renderedImage = model.predict_generator(renderGenerator, steps=frameShape[0])
 
+
   finalImage = np.reshape(renderedImage, frameShape)
 
   fig.add_subplot(2, 1, 1)
@@ -452,5 +450,13 @@ if testRender:
   plt.imshow(finalImage)
 
   plt.show()
+
+  # Compute pixel loss
+  renderLoss = model.evaluate_generator(renderGenerator, steps=frameShape[0])
+  lossData = np.reshape(renderedImage, frameShape)
+
+  # Export frame data
+  imageio.imwrite(resourcesFolder + modelName + "_Render_0.png", finalImage/255)
+  imageio.imwrite(resourcesFolder + modelName + "_LossRender_0.png", lossData/np.amax(lossData))
 
 #--------------------------------------------------------------#
