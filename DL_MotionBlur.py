@@ -15,6 +15,7 @@ dataShape = 201 # Convolution K size
 
 # Training
 trainModel = True
+modelFromFile = False
 trainFromCheckpoint = True
 batchSize = 200
 trainEpochs = 15
@@ -25,7 +26,7 @@ saveFiles = True
 shuffleSeed = 36
 
 # Debug & Visualization
-lossGraph = True
+lossGraph = False
 testRender = False
 debugSample = False
 randomSample = False
@@ -259,61 +260,87 @@ if (debugSample) :
 
 #---------------------TensorFlow model----------------------#
 
-input0 = tf.keras.Input(shape=(dataShape, dataShape, 3), name='input_0') #Scene color
-input1 = tf.keras.Input(shape=(dataShape, dataShape, 1), name='input_1') #Depth 0
-input2 = tf.keras.Input(shape=(dataShape, dataShape, 1), name='input_2') #Depth -1
-input3 = tf.keras.Input(shape=(dataShape, dataShape, 1), name='input_3') #Depth -2
+input0 = tf.keras.Input(shape=(dataShape, dataShape, 3), name='input_0', dtype='float16') #Scene color
+input1 = tf.keras.Input(shape=(dataShape, dataShape, 1), name='input_1', dtype='float16') #Depth 0
+input2 = tf.keras.Input(shape=(dataShape, dataShape, 1), name='input_2', dtype='float16') #Depth -1
+input3 = tf.keras.Input(shape=(dataShape, dataShape, 1), name='input_3', dtype='float16') #Depth -2
 
-#-Definition---------------------#
+if modelFromFile :
+  # load json and create model
+  json_file = open(resourcesFolder + 'modelTest.json', 'r')
+  loaded_model_json = json_file.read()
+  json_file.close()
+  model = tf.keras.models.model_from_json(loaded_model_json, custom_objects={'input_0' : input0, 'input_1' : input1, 'input_2' : input2, 'input_3' : input3})
+  # model = load_model(resourcesFolder + "modelTest.h5", custom_objects={'Loss':Loss})
+  print("Loaded model from disk")
 
-#Input1
-x = tf.keras.layers.MaxPooling2D(2,2)(input1)
-x = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(x)
-x = tf.keras.layers.MaxPooling2D(4,4)(x)
-x = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(x)
-x = tf.keras.layers.MaxPooling2D(2,2)(x)
-x = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(x)
-x = tf.keras.layers.Flatten()(x)
-x = tf.keras.Model(inputs=input1, outputs=x)
+else :
+  #-Definition---------------------#
 
-#Input2
-y = tf.keras.layers.MaxPooling2D(2,2)(input2)
-y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
-y = tf.keras.layers.MaxPooling2D(4,4)(y)
-y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
-y = tf.keras.layers.MaxPooling2D(2,2)(y)
-y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
-y = tf.keras.layers.Flatten()(y)
-y = tf.keras.Model(inputs=input2, outputs=y)
+  #Input1
+  x = tf.keras.layers.MaxPooling2D(2,2)(input1)
+  x = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(x)
+  x = tf.keras.layers.MaxPooling2D(4,4)(x)
+  x = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(x)
+  x = tf.keras.layers.MaxPooling2D(2,2)(x)
+  x = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(x)
+  x = tf.keras.layers.Flatten()(x)
+  x = tf.keras.Model(inputs=input1, outputs=x)
 
-#Input3
-z = tf.keras.layers.MaxPooling2D(2,2)(input3)
-z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
-z = tf.keras.layers.MaxPooling2D(4,4)(z)
-z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
-z = tf.keras.layers.MaxPooling2D(2,2)(z)
-z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
-z = tf.keras.layers.Flatten()(z)
-z = tf.keras.Model(inputs=input3, outputs=z)
+  #Input2
+  y = tf.keras.layers.MaxPooling2D(2,2)(input2)
+  y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
+  y = tf.keras.layers.MaxPooling2D(4,4)(y)
+  y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
+  y = tf.keras.layers.MaxPooling2D(2,2)(y)
+  y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
+  y = tf.keras.layers.Flatten()(y)
+  y = tf.keras.Model(inputs=input2, outputs=y)
 
-#Combine inputs
-combined = tf.keras.layers.concatenate([x.output, y.output, z.output])
+  #Input3
+  z = tf.keras.layers.MaxPooling2D(2,2)(input3)
+  z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
+  z = tf.keras.layers.MaxPooling2D(4,4)(z)
+  z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
+  z = tf.keras.layers.MaxPooling2D(2,2)(z)
+  z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
+  z = tf.keras.layers.Flatten()(z)
+  z = tf.keras.Model(inputs=input3, outputs=z)
 
-#Common network
-n = tf.keras.layers.Dense(128, activation='relu')(combined)
-n = tf.keras.layers.Dense(dataShape**2, activation='linear')(n)
-n = tf.keras.layers.ReLU()(n)
-n = tf.keras.layers.Lambda(lambda l: ApplyKernel(input0, l))(n)
+  #Combine inputs
+  combined = tf.keras.layers.concatenate([x.output, y.output, z.output])
 
-#Model
-model = tf.keras.Model(inputs=[input0, x.input, y.input, z.input], outputs=n)
+  #Common network
+  n = tf.keras.layers.Dense(128, activation='relu')(combined)
+  n = tf.keras.layers.Dense(dataShape**2, activation='linear')(n)
+  n = tf.keras.layers.ReLU()(n)
+  n = tf.keras.layers.Lambda(lambda l: ApplyKernel(input0, l))(n)
 
-#--------------------------------#
+  #Model
+  model = tf.keras.Model(inputs=[input0, x.input, y.input, z.input], outputs=n)
+
+  #--------------------------------#
 
 model.compile(loss=Loss, 
-  optimizer=RMSprop(lr=learningRate))
+  optimizer=RMSprop(lr=learningRate, epsilon=1e-4))
+
+tf.keras.backend.set_epsilon(1e-8)
+
+# model2.compile(loss=Loss,
+#   optimizer=RMSprop(lr=learningRate))
 
 model.summary()
+
+if not modelFromFile :
+  # serialize model to JSON
+  model_json = model.to_json()
+  with open(resourcesFolder + "modelTest.json", "w") as json_file:
+      json_file.write(model_json)
+  # model.save(resourcesFolder + "modelTest.h5")
+  # del model
+  # model = load_model(resourcesFolder + "modelTest.h5", custom_objects={'Loss':Loss})
+  
+  print("Saved model to disk")
 
 if trainModel :
   if trainFromCheckpoint :
@@ -341,8 +368,9 @@ if trainModel :
 
 else :
   model.load_weights(weightsFileName)
-  with open(graphDataFileName, 'rb') as graphDataFile :
-    training_loss, test_loss, epoch_count, trainingSetSize = pickle.load(graphDataFile)
+  if lossGraph :
+    with open(graphDataFileName, 'rb') as graphDataFile :
+      training_loss, test_loss, epoch_count, trainingSetSize = pickle.load(graphDataFile)
 
 if (lossGraph) :
   #-----------------Visualize loss history--------------------#
@@ -360,7 +388,7 @@ if (lossGraph) :
 
 sampleGenerator = SampleSequence(batchSize, testSet)
 
-dataExample = sampleGenerator.__getitem__(0)[0]['input_0'][0]
+dataExample = sampleGenerator.__getitem__(0)['input_0'][0]
 frameShape = dataExample.shape
 
 batchPerFrame = (frameShape[0] * frameShape[1])//batchSize
@@ -373,7 +401,7 @@ else :
   testBatch = random.randint(0, batchPerFrame)
   testElement = random.randint(0, batchSize)
 
-example = sampleGenerator.__getitem__(testFrame * batchPerFrame + testBatch)[testElement]
+example = sampleGenerator.__getitem__(testFrame * batchPerFrame + testBatch)
 
 testPredict = model.predict(example[0], steps=math.ceil(testSetSize/batchSize))
 testLoss = model.evaluate_generator(testGenerator)
