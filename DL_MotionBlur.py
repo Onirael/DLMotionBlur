@@ -369,7 +369,7 @@ if (lossGraph) :
 
 sampleGenerator = SampleSequence(batchSize, testSet)
 
-dataExample = sampleGenerator.__getitem__(0)[0]['input_0'][0]
+dataExample = sampleGenerator.__getitem__(0)['input_0'][0]
 frameShape = dataExample.shape
 
 batchPerFrame = (frameShape[0] * frameShape[1])//batchSize
