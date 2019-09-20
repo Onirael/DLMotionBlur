@@ -18,22 +18,22 @@ trainModel = True
 trainFromCheckpoint = True
 batchSize = 200
 trainEpochs = 15
-stride = 3
+stride = 99
 learningRate = 0.001
 saveFiles = True
 
-shuffleSeed = 42
+shuffleSeed = 36
 
 # Debug & Visualization
 lossGraph = True
 testRender = False
 debugSample = False
-randomSample = True
+randomSample = False
 sample = 420
 
 # File handling
 digitFormat = 4
-setCount = 5
+setCount = 20
 startFrame = 228
 endFrame = 999
 resourcesFolder = "D:/Bachelor_resources/"
@@ -57,17 +57,18 @@ trainCheckpoint = ModelCheckpoint(weightsFileName, verbose=0, save_weights_only=
 #-----------------------Keras Sequence----------------------#
 
 class SampleSequence(tf.keras.utils.Sequence) :
-  def __init__(self, batch_size, frames, stride=0) :
+  def __init__(self, batch_size, frames, frameShape, sampleMaps, stride=0) :
     global dataShape
-    sceneDepth0 = imageio.imread(workDirectory + 'SceneDepth/' + filePrefix + 'SceneDepth_' + GetFrameString(frames[0], digitFormat) + '.hdr') # Test image for shape
 
-    self.frameShape = sceneDepth0.shape
+    self.frameShape = frameShape
     self.sampleSize = (dataShape - 1)//2                                                            # "Padding" of the convolution kernel
     self.batch_size = batch_size
-    self.batchPerFrame = (self.frameShape[0] * self.frameShape[1] // (batch_size * (stride + 1)))   # Number of batches per input frames
+    self.batchPerFrame = self.frameShape[0] * self.frameShape[1] // (batch_size * stride)           # Number of batches per input frames
     self.batchAmount = len(frames) * self.batchPerFrame                                             # Total number of batches
     self.frames = frames                                                                            # List of input frame numbers
     self.stride = stride                                                                            # Pixels to skip when reading file
+    self.batchArray = np.arange(batch_size)
+    self.sampleMaps = sampleMaps
 
   def __len__(self) :
     return self.batchAmount
@@ -96,19 +97,40 @@ class SampleSequence(tf.keras.utils.Sequence) :
     batch_FinalImage = np.zeros((self.batch_size, 3))
 
     for element in range(self.batch_size) :
-      i = (element + frameBatch * self.batch_size) * (self.stride + 1)                          # Gets the pixel ID for the current frame
-      pixel = (i%self.frameShape[0] + self.sampleSize, i//self.frameShape[1] + self.sampleSize) # Gets the pixel coordinates
+      i = (element + frameBatch * self.batch_size) * self.stride                       # Gets the pixel ID for the current frame
+      samplePixel = self.sampleMaps[frameID, i%self.frameShape[0], i//self.frameShape[1]]
+      pixel = (samplePixel[0] + self.sampleSize, samplePixel[1] + self.sampleSize)     # Gets the pixel coordinates
 
       # Array assignment
       batch_SceneColor[element] = SampleImage(sceneColor, pixel, self.sampleSize)
       batch_SceneDepth0[element] = SampleImage(sceneDepth0, pixel, self.sampleSize)
       batch_SceneDepth1[element] = SampleImage(sceneDepth1, pixel, self.sampleSize)
       batch_SceneDepth2[element] = SampleImage(sceneDepth2, pixel, self.sampleSize)
-      batch_FinalImage[element] = finalImage[i%self.frameShape[0], i//self.frameShape[1]]
+      batch_FinalImage[element] = finalImage[samplePixel[0], samplePixel[1]]
         
     return ({'input_0':batch_SceneColor, 'input_1':batch_SceneDepth0, 'input_2':batch_SceneDepth1, 'input_3':batch_SceneDepth2}, batch_FinalImage)
 
 #-------------------------Functions-------------------------#
+
+def shuffle_along_axis(a, axis): # Function courtesy of Divakar (https://stackoverflow.com/questions/5040797/shuffling-numpy-array-along-a-given-axis/5044364#5044364)
+    idx = np.random.rand(*a.shape).argsort(axis=axis)
+    return np.take_along_axis(a,idx,axis=axis)
+
+def GetSampleMaps(frameShape, frames, seed) :
+  indexMap = np.zeros((frameShape[0], frameShape[1], 2))
+  indexMap[:,:,0] = np.reshape(np.tile(np.array([np.arange(frameShape[0])]), frameShape[1]), (frameShape[0], frameShape[1]))
+  indexMap[:,:,1] = np.transpose(np.reshape(np.tile(np.array([np.arange(frameShape[1])]), frameShape[0]), (frameShape[1], frameShape[0])))
+  sampleMaps = np.zeros((len(frames), frameShape[0], frameShape[1], 2))
+
+  frameCount = len(frames)
+  for i in range(frameCount) :
+    np.random.seed(seed + i)
+    sampleMap = shuffle_along_axis(shuffle_along_axis(indexMap, axis=0), axis=1)
+    sampleMaps[i] = sampleMap
+  
+  np.random.seed(seed)
+
+  return sampleMaps.astype('uint16')
 
 def GetFrameString(frameNumber, digitFormat) : # Returns a string of the frame number with the correct amount of digits
   if math.log(frameNumber, 10) > digitFormat :
@@ -174,42 +196,39 @@ def Loss(y_true, y_pred) : # Basic RGB color distance
 
 np.random.seed(shuffleSeed)
 setDescription = np.random.randint(startFrame, endFrame, setCount) # Contains a random sample of frames to use as a data set
+frameShape = imageio.imread(workDirectory + 'SceneDepth/' + filePrefix + 'SceneDepth_' + GetFrameString(setDescription[0], digitFormat) + '.hdr').shape # Test image for shape
 
-print("\nTotal training examples : {:.2f} Million".format(setCount * 1920 * 1080 /(1000000 * (stride + 1))))
-
-# Data sets sizes
-trainingSetSize = math.floor(setCount * 0.6)
-crossValidSetSize = math.floor(setCount * 0.2)
-testSetSize = math.floor(setCount * 0.2)
-
-# Slice set description to obtain data sets
-np.random.shuffle(setDescription)
-trainSet = setDescription[:trainingSetSize]
-crossValidSet = setDescription[trainingSetSize:trainingSetSize + crossValidSetSize]
-testSet = setDescription[trainingSetSize + crossValidSetSize:]
+examplesCount = setCount * frameShape[0] * frameShape[1] /stride
+examplesDisplayCount = examplesCount/1000000
+print("\nTotal training examples : {:.2f} Million".format(examplesDisplayCount))
+trainSetFraction = 1
+crossValidSetFraction = 0.2
+testSetFraction = 0.2
 
 #Create generators
-trainGenerator = SampleSequence(batchSize, trainSet, stride=stride)
-crossValidGenerator = SampleSequence(batchSize, crossValidSet, stride=stride)
-testGenerator = SampleSequence(batchSize, testSet, stride=stride)
+trainGenerator = SampleSequence(batchSize, setDescription, frameShape, GetSampleMaps(frameShape, setDescription, shuffleSeed), stride=stride//trainSetFraction)
+crossValidGenerator = SampleSequence(batchSize, setDescription, frameShape, GetSampleMaps(frameShape, setDescription, shuffleSeed + 10), stride=int(stride//crossValidSetFraction))
+testGenerator = SampleSequence(batchSize, setDescription, frameShape, GetSampleMaps(frameShape, setDescription, shuffleSeed + 20), stride=int(stride//testSetFraction))
 
-print("\nTraining set size : {:.2f} Million".format(trainingSetSize * 1920 * 1080 /(1000000 * (stride + 1))))
-print("Cross validation set size : {:.2f} Million".format(crossValidSetSize * 1920 * 1080 /(1000000 * (stride + 1))))
-print("Test set size : {:.2f} Million".format(testSetSize * 1920 * 1080 /(1000000 * (stride + 1))))
+print("\nTraining set size : {:.2f} Million".format(examplesDisplayCount * trainSetFraction))
+print("Cross validation set size : {:.2f} Million".format(examplesDisplayCount * crossValidSetFraction))
+print("Test set size : {:.2f} Million".format(examplesDisplayCount * testSetFraction))
 print()
 
 
 #-------------------------Debug-----------------------------#
 
 if (debugSample) :
-  sampleGenerator = SampleSequence(batchSize, testSet)
+  dataSampleMaps = GetSampleMaps(frameShape, setDescription, shuffleSeed)
+  sampleGenerator = SampleSequence(batchSize, setDescription, frameShape, dataSampleMaps, stride=1)
 
-  dataExample = sampleGenerator.__getitem__(0)[0]['input_0'][0]
+  dataBatch = sampleGenerator.__getitem__(0)
+  dataExample = dataBatch[0]['input_0'][0]
   frameShape = dataExample.shape
 
-  batchPerFrame = (frameShape[0] * frameShape[1])//batchSize
+  batchPerFrame = (frameShape[0] * frameShape[1])//(batchSize * stride)
   if randomSample :
-    testFrame = random.randint(0, len(testSet) - 1)
+    testFrame = random.randint(0, len(setDescription))
     testBatch = random.randint(0, batchPerFrame)
     testElement = random.randint(0, batchSize)
   else :
@@ -217,7 +236,7 @@ if (debugSample) :
     testBatch = random.randint(0, batchPerFrame)
     testElement = random.randint(0, batchSize)
 
-  plotTitle = "Frame {} sample {}".format(testSet[testFrame], testBatch * batchSize + testElement)
+  plotTitle = "Frame {} sample {}".format(testFrame, testBatch * batchSize + testElement)
 
   fig = plt.figure(figsize=(8,8))
   fig.suptitle(plotTitle, fontsize=16)
@@ -314,7 +333,7 @@ if trainModel :
   epoch_count = range(1, len(training_loss) + 1) # Create count of the number of epochs
 
   with open(graphDataFileName, 'wb') as graphDataFile :
-    pickle.dump((training_loss, test_loss, epoch_count, trainingSetSize), graphDataFile)
+    pickle.dump((training_loss, test_loss, epoch_count, setCount * trainSetFraction), graphDataFile)
 
   if saveFiles :
     model.save_weights(weightsFileName)
