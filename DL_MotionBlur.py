@@ -27,7 +27,7 @@ shuffleSeed = 36
 
 # Debug & Visualization
 lossGraph = False
-testRender = False
+testRender = True
 debugSample = False
 randomSample = False
 sample = 420
@@ -192,6 +192,10 @@ def Loss(y_true, y_pred) : # Basic RGB color distance
   delta = tf.reduce_mean(tf.abs(y_true - y_pred), axis=1)
   return delta
 
+def RenderLoss(y_true, y_pred) :
+  delta = np.mean(np.absolute(y_true - y_pred), axis=1)
+  return delta
+
 #-----------------------File handling-----------------------#
 
 np.random.seed(shuffleSeed)
@@ -206,6 +210,7 @@ crossValidSetFraction = 0.2
 testSetFraction = 0.2
 
 #Create generators
+print("\nGenerating trainig data...")
 trainGenerator = SampleSequence(batchSize, setDescription, frameShape, \
   GetSampleMaps(frameShape, setDescription, shuffleSeed), stride=stride//trainSetFraction)
 crossValidGenerator = SampleSequence(batchSize, setDescription, frameShape, \
@@ -417,7 +422,7 @@ print("Time per image: {:.2f}ms ".format((end-start)/(examplesCount*testSetFract
 if testRender:
   fig = plt.figure(figsize=(8,8))
   
-  render_0FinalImage = imageio.imread('D:/Bachelor_resources/Capture1/Capture1_FinalImage_0411.png')
+  render_0FinalImage = imageio.imread('D:/Bachelor_resources/Capture1/Capture1_FinalImage_0411.png')[:,:,:3]
   frameShape = render_0FinalImage.shape
 
   padSize = math.floor((dataShape - 1)/2)
@@ -450,8 +455,8 @@ if testRender:
   plt.show()
 
   # Compute pixel loss
-  renderLoss = model.evaluate_generator(renderGenerator, steps=frameShape[0])
-  lossData = np.reshape(renderedImage, frameShape)
+  renderLoss = RenderLoss(render_0FinalImage, renderedImage)
+  lossData = np.reshape(renderLoss, (frameShape[0], frameShape[1]))
 
   # Export frame data
   imageio.imwrite(resourcesFolder + modelName + "_Render_0.png", finalImage/255)
