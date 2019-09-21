@@ -195,7 +195,7 @@ def Loss(y_true, y_pred) : # Basic RGB color distance
   return delta
 
 def RenderLoss(y_true, y_pred) :
-  delta = np.mean(np.absolute(y_true - y_pred), axis=1)
+  delta = np.mean(np.absolute(y_true - y_pred), axis=2)
   return delta
 
 #-----------------------File handling-----------------------#
@@ -405,12 +405,12 @@ else :
 
 example = sampleGenerator.__getitem__(testFrame * batchPerFrame + testBatch)
 
-testPredict = model.predict(example[0])
+# testPredict = model.predict(example[0])
 testLoss = model.evaluate_generator(testGenerator)
 
 # Display sample results for debugging purpose
-print("Test color : ", testPredict)
-print("Expected color : ", example[1])
+# print("Test color : ", testPredict)
+# print("Expected color : ", example[1])
 print("Test loss : ", testLoss)
 
 start = perf_counter_ns()
@@ -424,7 +424,7 @@ print("Time per image: {:.2f}ms ".format((end-start)/(examplesCount*testSetFract
 if testRender:
   fig = plt.figure(figsize=(8,8))
   
-  render_0FinalImage = imageio.imread('D:/Bachelor_resources/Capture1/Capture1_FinalImage_0411.png')[:,:,:3]
+  render_0FinalImage = imageio.imread('D:/Bachelor_resources/Capture1/Capture1_FinalImage_0839.png')[:,:,:3]
   frameShape = render_0FinalImage.shape
 
   padSize = math.floor((dataShape - 1)/2)
@@ -434,13 +434,13 @@ if testRender:
   render_2SceneDepth = np.zeros((frameShape[0] + 2 * padSize, frameShape[1] + 2 * padSize, 1))
 
   render_0SceneColor[padSize:padSize + frameShape[0], padSize:padSize + frameShape[1]] = \
-    (imageio.imread('D:/Bachelor_resources/Capture1/Capture1_SceneColor_0412.png')[:,:,:3]/255.0).astype('float16')
+    (imageio.imread('D:/Bachelor_resources/Capture1/Capture1_SceneColor_0839.png')[:,:,:3]/255.0).astype('float16')
   render_0SceneDepth[padSize:padSize + frameShape[0], padSize:padSize + frameShape[1]] = \
-    (imageio.imread('D:/Bachelor_resources/Capture1/Capture1_SceneDepth_0412.hdr')[:,:,:1]/3000.0).astype('float16')
+    (imageio.imread('D:/Bachelor_resources/Capture1/Capture1_SceneDepth_0839.hdr')[:,:,:1]/3000.0).astype('float16')
   render_1SceneDepth[padSize:padSize + frameShape[0], padSize:padSize + frameShape[1]] = \
-    (imageio.imread('D:/Bachelor_resources/Capture1/Capture1_SceneDepth_0411.hdr')[:,:,:1]/3000.0).astype('float16')
+    (imageio.imread('D:/Bachelor_resources/Capture1/Capture1_SceneDepth_0838.hdr')[:,:,:1]/3000.0).astype('float16')
   render_2SceneDepth[padSize:padSize + frameShape[0], padSize:padSize + frameShape[1]] = \
-    (imageio.imread('D:/Bachelor_resources/Capture1/Capture1_SceneDepth_0410.hdr')[:,:,:1]/3000.0).astype('float16')
+    (imageio.imread('D:/Bachelor_resources/Capture1/Capture1_SceneDepth_0837.hdr')[:,:,:1]/3000.0).astype('float16')
   
   renderGenerator = MakeRenderGenerator(render_0SceneColor, render_0SceneDepth, render_1SceneDepth, render_2SceneDepth, frameShape)
   renderedImage = model.predict_generator(renderGenerator, steps=frameShape[0])
@@ -452,16 +452,17 @@ if testRender:
   plt.imshow(render_0FinalImage)
 
   fig.add_subplot(2, 1, 2)
-  plt.imshow(finalImage)
+  plt.imshow(finalImage.astype('uint8'))
 
   plt.show()
 
   # Compute pixel loss
-  renderLoss = RenderLoss(render_0FinalImage, renderedImage)
-  lossData = np.reshape(renderLoss, (frameShape[0], frameShape[1]))
+  renderLoss = RenderLoss(render_0FinalImage, finalImage)
+
+  plt.imshow(renderLoss)/np.amax(renderLoss)
 
   # Export frame data
   imageio.imwrite(resourcesFolder + modelName + "_Render_0.png", finalImage/255)
-  imageio.imwrite(resourcesFolder + modelName + "_LossRender_0.png", lossData/np.amax(lossData))
+  imageio.imwrite(resourcesFolder + modelName + "_LossRender_0.png", renderLoss/np.amax(renderLoss))
 
 #--------------------------------------------------------------#
