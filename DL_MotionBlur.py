@@ -14,7 +14,7 @@ os.environ['TF_ENABLE_AUTO_MIXED_PRECISION'] = '1'
 dataShape = 201 # Convolution K size
 
 # Training
-trainModel = False
+trainModel = True
 modelFromFile = False
 trainFromCheckpoint = True
 batchSize = 200
@@ -100,39 +100,37 @@ class SampleSequence(tf.keras.utils.Sequence) :
 
     for element in range(self.batch_size) :
       i = (element + frameBatch * self.batch_size) * self.stride                       # Gets the pixel ID for the current frame
-      samplePixel = self.sampleMaps[frameID, i%self.frameShape[0], i//self.frameShape[1]]
-      pixel = (samplePixel[0] + self.sampleSize, samplePixel[1] + self.sampleSize)     # Gets the pixel coordinates
+      samplePixel = self.sampleMaps[frameID, i%self.frameShape[0], \
+        i//self.frameShape[0]]
+      pixel = (samplePixel%self.frameShape[0] + self.sampleSize, \
+        samplePixel//self.frameShape[0] + self.sampleSize)     # Gets the pixel coordinates
 
       # Array assignment
       batch_SceneColor[element] = SampleImage(sceneColor, pixel, self.sampleSize)
       batch_SceneDepth0[element] = SampleImage(sceneDepth0, pixel, self.sampleSize)
       batch_SceneDepth1[element] = SampleImage(sceneDepth1, pixel, self.sampleSize)
       batch_SceneDepth2[element] = SampleImage(sceneDepth2, pixel, self.sampleSize)
-      batch_FinalImage[element] = finalImage[samplePixel[0], samplePixel[1]]
+      batch_FinalImage[element] = finalImage[samplePixel%self.frameShape[0], \
+                                              samplePixel//self.frameShape[0]]
         
     return ({'input_0':batch_SceneColor, 'input_1':batch_SceneDepth0, 'input_2':batch_SceneDepth1, 'input_3':batch_SceneDepth2}, batch_FinalImage)
 
 #-------------------------Functions-------------------------#
 
-def shuffle_along_axis(a, axis): # Function courtesy of Divakar (https://stackoverflow.com/questions/5040797/shuffling-numpy-array-along-a-given-axis/5044364#5044364)
-    idx = np.random.rand(*a.shape).argsort(axis=axis)
-    return np.take_along_axis(a,idx,axis=axis)
-
 def GetSampleMaps(frameShape, frames, seed) :
-  indexMap = np.zeros((frameShape[0], frameShape[1], 2))
-  indexMap[:,:,0] = np.reshape(np.tile(np.array([np.arange(frameShape[0])]), frameShape[1]), (frameShape[0], frameShape[1]))
-  indexMap[:,:,1] = np.transpose(np.reshape(np.tile(np.array([np.arange(frameShape[1])]), frameShape[0]), (frameShape[1], frameShape[0])))
-  sampleMaps = np.zeros((len(frames), frameShape[0], frameShape[1], 2))
+  sampleMaps = np.zeros((len(frames), frameShape[0], frameShape[1]))
+  indexMap = np.reshape(np.arange(frameShape[0]*frameShape[1]), (frameShape[0], frameShape[1]))
 
   frameCount = len(frames)
   for i in range(frameCount) :
     np.random.seed(seed + i)
-    sampleMap = shuffle_along_axis(shuffle_along_axis(indexMap, axis=0), axis=1)
+
+    sampleMap = np.copy(indexMap)
+    np.random.shuffle(sampleMap)
     sampleMaps[i] = sampleMap
-  
   np.random.seed(seed)
 
-  return sampleMaps.astype('uint16')
+  return sampleMaps.astype('uint32')
 
 def GetFrameString(frameNumber, digitFormat) : # Returns a string of the frame number with the correct amount of digits
   if math.log(frameNumber, 10) > digitFormat :
