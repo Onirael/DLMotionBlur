@@ -42,7 +42,7 @@ workDirectory = resourcesFolder  + 'Capture1_Sorted/'
 filePrefix = 'Capture1_'
 
 # Model output
-modelName = "3Depth_K201"
+modelName = "3Depth_K201_selectedExamples"
 weightsFileName = resourcesFolder + modelName + "_Weights.h5"
 graphDataFileName = resourcesFolder + modelName + "_GraphData.dat"
 
