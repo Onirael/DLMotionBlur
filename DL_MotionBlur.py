@@ -45,9 +45,9 @@ workDirectory = resourcesFolder  + 'Capture1_Sorted/'
 filePrefix = 'Capture1_'
 
 # Model output
-modelName = "3Depth_K193"
+modelName = "3Depth_K193_EncDec"
 weightsImport = resourcesFolder + modelName + "_Weights.h5"
-weightsFileName = resourcesFolder + modelName + "_ReLU" + "_Weights.h5"
+weightsFileName = resourcesFolder + modelName + "_Weights.h5"
 graphDataFileName = resourcesFolder + modelName + "_GraphData.dat"
 
 #------------------------TF session-------------------------#
@@ -304,7 +304,7 @@ else :
   x1 = tf.keras.layers.MaxPooling2D((2,2), padding='same')(x0)
   x1 = tf.keras.layers.Conv2D(16, (3,3), padding='same', activation='relu')(x1)
   x1 = tf.keras.layers.ReLU()(x1)
-  x2 = tf.keras.layers.MaxPooling2D(2,2)(x1)
+  x2 = tf.keras.layers.MaxPooling2D((2,2), padding='same')(x1)
   x2 = tf.keras.layers.Conv2D(32, (3,3), padding='same', activation='relu')(x2)
   x2 = tf.keras.layers.ReLU()(x2)
   x = tf.keras.Model(inputs=input1, outputs=x2)
@@ -316,7 +316,7 @@ else :
   y1 = tf.keras.layers.MaxPooling2D((2,2), padding='same')(y0)
   y1 = tf.keras.layers.Conv2D(16, (3,3), padding='same', activation='relu')(y1)
   y1 = tf.keras.layers.ReLU()(y1)
-  y2 = tf.keras.layers.MaxPooling2D(2,2)(y1)
+  y2 = tf.keras.layers.MaxPooling2D((2,2), padding='same')(y1)
   y2 = tf.keras.layers.Conv2D(32, (3,3), padding='same', activation='relu')(y2)
   y2 = tf.keras.layers.ReLU()(y2)
   y = tf.keras.Model(inputs=input2, outputs=y2)
@@ -328,25 +328,26 @@ else :
   z1 = tf.keras.layers.MaxPooling2D((2,2), padding='same')(z0)
   z1 = tf.keras.layers.Conv2D(16, (3,3), padding='same', activation='relu')(z1)
   z1 = tf.keras.layers.ReLU()(z1)
-  z2 = tf.keras.layers.MaxPooling2D(2,2)(z1)
+  z2 = tf.keras.layers.MaxPooling2D((2,2), padding='same')(z1)
   z2 = tf.keras.layers.Conv2D(32, (3,3), padding='same', activation='relu')(z2)
   z2 = tf.keras.layers.ReLU()(z2)
   z = tf.keras.Model(inputs=input3, outputs=z2)
 
 
   #Combine inputs
-  combined = tf.keras.layers.Add()([x.output, y.output, z.output])
+  combined = tf.keras.layers.concatenate([x.output, y.output, z.output])
   combined = tf.keras.layers.UpSampling2D((2,2))(combined)
   combined = tf.keras.layers.Conv2D(16, (3,3), padding='same', activation='relu')(combined)
+  combined = tf.keras.layers.Cropping2D(cropping=((1,0), (1,0)))(combined)
   combined = tf.keras.layers.ReLU()(combined)
 
-  combined = tf.keras.layers.concatenate([x1, y1, z1])
+  combined = tf.keras.layers.concatenate([x1, y1, z1, combined])
   combined = tf.keras.layers.UpSampling2D((2,2))(combined)
   combined = tf.keras.layers.Conv2D(8, (3,3), padding='same', activation='relu')(combined)
-  combined = tf.keras.layers.ReLU()(combined)
   combined = tf.keras.layers.Cropping2D(cropping=((1,0), (1,0)))(combined)
+  combined = tf.keras.layers.ReLU()(combined)
 
-  combined = tf.keras.layers.Add()([x0, y0, z0, combined])
+  combined = tf.keras.layers.concatenate([x0, y0, z0, combined])
   combined = tf.keras.layers.UpSampling2D((2,2))(combined)
   combined = tf.keras.layers.Conv2D(8, (3,3), padding='same', activation='relu')(combined)
   combined = tf.keras.layers.ReLU()(combined)
