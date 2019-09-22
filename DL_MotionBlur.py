@@ -1,9 +1,12 @@
 from matplotlib import pyplot as plt
 import numpy as np
 import tensorflow as tf
+import tensorflow.keras.backend as K
 from tensorflow.keras.optimizers import RMSprop
+from tensorflow.keras.optimizers import SGD
 from tensorflow.keras.models import load_model
 from tensorflow.keras.callbacks import ModelCheckpoint
+from tensorflow.compat.v1.keras.mixed_precision.experimental import LossScaleOptimizer
 from time import perf_counter_ns
 import os, math, random, imageio, pickle
 import tensorflow.python.util.deprecation as deprecation
@@ -11,15 +14,15 @@ deprecation._PRINT_DEPRECATION_WARNINGS = False
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 os.environ['TF_ENABLE_AUTO_MIXED_PRECISION'] = '1'
 
-dataShape = 201 # Convolution K size
+dataShape = 193 # Convolution K size
 
 # Training
 trainModel = True
 modelFromFile = False
-trainFromCheckpoint = True
-batchSize = 200
-trainEpochs = 15
-stride = 99
+trainFromCheckpoint = False
+batchSize = 128
+trainEpochs = 10
+stride = 25
 learningRate = 0.001
 saveFiles = True
 
@@ -42,8 +45,9 @@ workDirectory = resourcesFolder  + 'Capture1_Sorted/'
 filePrefix = 'Capture1_'
 
 # Model output
-modelName = "3Depth_K201"
-weightsFileName = resourcesFolder + modelName + "_Weights.h5"
+modelName = "3Depth_K193"
+weightsImport = resourcesFolder + modelName + "_Weights.h5"
+weightsFileName = resourcesFolder + modelName + "_ReLU" + "_Weights.h5"
 graphDataFileName = resourcesFolder + modelName + "_GraphData.dat"
 
 #------------------------TF session-------------------------#
@@ -85,11 +89,15 @@ class SampleSequence(tf.keras.utils.Sequence) :
     frameBatch = idx - frameID * self.batchPerFrame                                 # Gets the batch number for the current frame
 
     # Import frames
-    sceneColor = PadImage(imageio.imread(workDirectory + 'SceneColor/' + filePrefix + 'SceneColor_' + GetFrameString(frame, digitFormat) + '.png')[:,:,:3]/255.0, self.sampleSize).astype('float16')
-    sceneDepth0 = PadImage(imageio.imread(workDirectory + 'SceneDepth/' + filePrefix + 'SceneDepth_' + GetFrameString(frame, digitFormat) + '.hdr')[:,:,:1]/3000.0, self.sampleSize).astype('float16')
-    sceneDepth1 = PadImage(imageio.imread(workDirectory + 'SceneDepth/' + filePrefix + 'SceneDepth_' + GetFrameString(frame - 1, digitFormat) + '.hdr')[:,:,:1]/3000.0, self.sampleSize).astype('float16')
-    sceneDepth2 = PadImage(imageio.imread(workDirectory + 'SceneDepth/' + filePrefix + 'SceneDepth_' + GetFrameString(frame - 2, digitFormat) + '.hdr')[:,:,:1]/3000.0, self.sampleSize).astype('float16')
-    finalImage = imageio.imread(workDirectory + 'FinalImage/' + filePrefix + 'FinalImage_' + GetFrameString(frame, digitFormat) + '.png')[:,:,:3].astype('float16')
+    sceneColor = PadImage(imageio.imread(workDirectory + 'SceneColor/' + filePrefix + 'SceneColor_' + GetFrameString(frame, digitFormat) + '.png')\
+      [:,:,:3]/255.0, self.sampleSize).astype('uint8')
+    sceneDepth0 = PadImage(imageio.imread(workDirectory + 'SceneDepth/' + filePrefix + 'SceneDepth_' + GetFrameString(frame, digitFormat) + '.hdr')\
+      [:,:,:1]/3000.0, self.sampleSize).astype('float16')
+    sceneDepth1 = PadImage(imageio.imread(workDirectory + 'SceneDepth/' + filePrefix + 'SceneDepth_' + GetFrameString(frame - 1, digitFormat) + '.hdr')\
+      [:,:,:1]/3000.0, self.sampleSize).astype('float16')
+    sceneDepth2 = PadImage(imageio.imread(workDirectory + 'SceneDepth/' + filePrefix + 'SceneDepth_' + GetFrameString(frame - 2, digitFormat) + '.hdr')\
+      [:,:,:1]/3000.0, self.sampleSize).astype('float16')
+    finalImage = imageio.imread(workDirectory + 'FinalImage/' + filePrefix + 'FinalImage_' + GetFrameString(frame, digitFormat) + '.png')[:,:,:3].astype('uint8')
 
     # Batch arrays
     batch_SceneColor = np.zeros((self.batch_size, dataShape, dataShape, 3))
@@ -160,27 +168,29 @@ def PadImage(image, sampleSize) : # Returns the image with a sampleSize large pa
 
   return paddedImage
 
-def MakeRenderGenerator(sceneColor, sceneDepth0, sceneDepth1, sceneDepth2, frameShape, verbose=True) :
+def MakeRenderGenerator(sceneColor, sceneDepth0, sceneDepth1, sceneDepth2, frameShape, rowSteps, verbose=True) :
+  batch_size = frameShape[1]//rowSteps
 
   for row in range(frameShape[0]) :
     if verbose:
       print("Rendering... ({:.2f}%)".format(row/frameShape[0] * 100), end="\r")
 
-    curRow = \
-    {
-      'input_0' : np.zeros((frameShape[1], dataShape, dataShape, 3)),
-      'input_1' : np.zeros((frameShape[1], dataShape, dataShape, 1)),
-      'input_2' : np.zeros((frameShape[1], dataShape, dataShape, 1)),
-      'input_3' : np.zeros((frameShape[1], dataShape, dataShape, 1)),
-    }
-
-    for column in range(frameShape[1]) :
-      curRow['input_0'][column] = sceneColor[row:dataShape + row, column:dataShape + column]
-      curRow['input_1'][column] = sceneDepth0[row:dataShape + row, column:dataShape + column]
-      curRow['input_2'][column] = sceneDepth1[row:dataShape + row, column:dataShape + column]
-      curRow['input_3'][column] = sceneDepth2[row:dataShape + row, column:dataShape + column]
+    for step in range(rowSteps) :
+      curBatch = \
+      {
+        'input_0' : np.zeros((batch_size, dataShape, dataShape, 3)),
+        'input_1' : np.zeros((batch_size, dataShape, dataShape, 1)),
+        'input_2' : np.zeros((batch_size, dataShape, dataShape, 1)),
+        'input_3' : np.zeros((batch_size, dataShape, dataShape, 1)),
+      }
+      for batchElement in range(batch_size) :
+        column = (step * batch_size + batchElement)
+        curBatch['input_0'][batchElement] = sceneColor[row:dataShape + row, column:dataShape + column]
+        curBatch['input_1'][batchElement] = sceneDepth0[row:dataShape + row, column:dataShape + column]
+        curBatch['input_2'][batchElement] = sceneDepth1[row:dataShape + row, column:dataShape + column]
+        curBatch['input_3'][batchElement] = sceneDepth2[row:dataShape + row, column:dataShape + column]
     
-    yield curRow
+      yield curBatch
 
 def ApplyKernel(image, flatKernel) : # Applies convolution kernel to same shaped image
   global dataShape
@@ -189,6 +199,7 @@ def ApplyKernel(image, flatKernel) : # Applies convolution kernel to same shaped
   return tf.einsum('hij,hijk->hk', kernel, image)
 
 def Loss(y_true, y_pred) : # Basic RGB color distance
+  # y_pred = K.cast(y_pred, dtype='float32')
   delta = tf.reduce_mean(tf.abs(y_true - y_pred), axis=1)
   return delta
 
@@ -267,6 +278,9 @@ if (debugSample) :
 
 #---------------------TensorFlow model----------------------#
 
+K.set_floatx('float16')
+K.set_epsilon(1e-8)
+
 input0 = tf.keras.Input(shape=(dataShape, dataShape, 3), name='input_0', dtype='float16') #Scene color
 input1 = tf.keras.Input(shape=(dataShape, dataShape, 1), name='input_1', dtype='float16') #Depth 0
 input2 = tf.keras.Input(shape=(dataShape, dataShape, 1), name='input_2', dtype='float16') #Depth -1
@@ -284,53 +298,76 @@ else :
   #-Definition---------------------#
 
   #Input1
-  x = tf.keras.layers.MaxPooling2D(2,2)(input1)
-  x = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(x)
-  x = tf.keras.layers.MaxPooling2D(4,4)(x)
-  x = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(x)
-  x = tf.keras.layers.MaxPooling2D(2,2)(x)
-  x = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(x)
-  x = tf.keras.layers.Flatten()(x)
-  x = tf.keras.Model(inputs=input1, outputs=x)
+  x0 = tf.keras.layers.MaxPooling2D((2,2), padding='same')(input1)
+  x0 = tf.keras.layers.Conv2D(8, (3,3), padding='same', activation='relu')(x0)
+  x0 = tf.keras.layers.ReLU()(x0)
+  x1 = tf.keras.layers.MaxPooling2D((2,2), padding='same')(x0)
+  x1 = tf.keras.layers.Conv2D(16, (3,3), padding='same', activation='relu')(x1)
+  x1 = tf.keras.layers.ReLU()(x1)
+  x2 = tf.keras.layers.MaxPooling2D(2,2)(x1)
+  x2 = tf.keras.layers.Conv2D(32, (3,3), padding='same', activation='relu')(x2)
+  x2 = tf.keras.layers.ReLU()(x2)
+  x = tf.keras.Model(inputs=input1, outputs=x2)
 
   #Input2
-  y = tf.keras.layers.MaxPooling2D(2,2)(input2)
-  y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
-  y = tf.keras.layers.MaxPooling2D(4,4)(y)
-  y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
-  y = tf.keras.layers.MaxPooling2D(2,2)(y)
-  y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
-  y = tf.keras.layers.Flatten()(y)
-  y = tf.keras.Model(inputs=input2, outputs=y)
+  y0 = tf.keras.layers.MaxPooling2D((2,2), padding='same')(input2)
+  y0 = tf.keras.layers.Conv2D(8, (3,3), padding='same', activation='relu')(y0)
+  y0 = tf.keras.layers.ReLU()(y0)
+  y1 = tf.keras.layers.MaxPooling2D((2,2), padding='same')(y0)
+  y1 = tf.keras.layers.Conv2D(16, (3,3), padding='same', activation='relu')(y1)
+  y1 = tf.keras.layers.ReLU()(y1)
+  y2 = tf.keras.layers.MaxPooling2D(2,2)(y1)
+  y2 = tf.keras.layers.Conv2D(32, (3,3), padding='same', activation='relu')(y2)
+  y2 = tf.keras.layers.ReLU()(y2)
+  y = tf.keras.Model(inputs=input2, outputs=y2)
 
   #Input3
-  z = tf.keras.layers.MaxPooling2D(2,2)(input3)
-  z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
-  z = tf.keras.layers.MaxPooling2D(4,4)(z)
-  z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
-  z = tf.keras.layers.MaxPooling2D(2,2)(z)
-  z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
-  z = tf.keras.layers.Flatten()(z)
-  z = tf.keras.Model(inputs=input3, outputs=z)
+  z0 = tf.keras.layers.MaxPooling2D((2,2), padding='same')(input3)
+  z0 = tf.keras.layers.Conv2D(8, (3,3), padding='same', activation='relu')(z0)
+  z0 = tf.keras.layers.ReLU()(z0)
+  z1 = tf.keras.layers.MaxPooling2D((2,2), padding='same')(z0)
+  z1 = tf.keras.layers.Conv2D(16, (3,3), padding='same', activation='relu')(z1)
+  z1 = tf.keras.layers.ReLU()(z1)
+  z2 = tf.keras.layers.MaxPooling2D(2,2)(z1)
+  z2 = tf.keras.layers.Conv2D(32, (3,3), padding='same', activation='relu')(z2)
+  z2 = tf.keras.layers.ReLU()(z2)
+  z = tf.keras.Model(inputs=input3, outputs=z2)
+
 
   #Combine inputs
-  combined = tf.keras.layers.concatenate([x.output, y.output, z.output])
+  combined = tf.keras.layers.Add()([x.output, y.output, z.output])
+  combined = tf.keras.layers.UpSampling2D((2,2))(combined)
+  combined = tf.keras.layers.Conv2D(16, (3,3), padding='same', activation='relu')(combined)
+  combined = tf.keras.layers.ReLU()(combined)
+
+  combined = tf.keras.layers.concatenate([x1, y1, z1])
+  combined = tf.keras.layers.UpSampling2D((2,2))(combined)
+  combined = tf.keras.layers.Conv2D(8, (3,3), padding='same', activation='relu')(combined)
+  combined = tf.keras.layers.ReLU()(combined)
+  combined = tf.keras.layers.Cropping2D(cropping=((1,0), (1,0)))(combined)
+
+  combined = tf.keras.layers.Add()([x0, y0, z0, combined])
+  combined = tf.keras.layers.UpSampling2D((2,2))(combined)
+  combined = tf.keras.layers.Conv2D(8, (3,3), padding='same', activation='relu')(combined)
+  combined = tf.keras.layers.ReLU()(combined)
+  combined = tf.keras.layers.Cropping2D(cropping=((1,0), (1,0)))(combined)
+  combined = tf.keras.layers.Conv2D(1, (3,3), padding='same', activation='relu')(combined)
+  combined = tf.keras.layers.ReLU()(combined)
+
 
   #Common network
-  n = tf.keras.layers.Dense(128, activation='relu')(combined)
-  n = tf.keras.layers.Dense(dataShape**2, activation='linear')(n)
-  n = tf.keras.layers.ReLU()(n)
-  n = tf.keras.layers.Lambda(lambda l: ApplyKernel(input0, l))(n)
+  n = tf.keras.layers.Lambda(lambda l: ApplyKernel(input0, l))(combined)
 
   #Model
   model = tf.keras.Model(inputs=[input0, x.input, y.input, z.input], outputs=n, name=modelName)
 
   #--------------------------------#
 
-model.compile(loss=Loss, 
-  optimizer=RMSprop(lr=learningRate, epsilon=1e-4))
+model.compile(loss=Loss,
+  optimizer=LossScaleOptimizer(RMSprop(lr=learningRate, epsilon=1e-4), 1000))
+# model.compile(loss=Loss, 
+#   optimizer=RMSprop(lr=learningRate, epsilon=1e-4))
 
-tf.keras.backend.set_epsilon(1e-8)
 
 model.summary()
 
@@ -344,7 +381,7 @@ if not modelFromFile :
 
 if trainModel :
   if trainFromCheckpoint :
-    model.load_weights(weightsFileName)
+    model.load_weights(weightsImport)
 
   training = model.fit_generator(
     trainGenerator,
@@ -367,7 +404,7 @@ if trainModel :
     print("Saved weights to file")
 
 else :
-  model.load_weights(weightsFileName)
+  model.load_weights(weightsImport)
   if lossGraph :
     with open(graphDataFileName, 'rb') as graphDataFile :
       training_loss, test_loss, epoch_count, trainingSetSize = pickle.load(graphDataFile)
@@ -386,36 +423,36 @@ if (lossGraph) :
 
 #--------------------------Test Model--------------------------#
 
-sampleGenerator = SampleSequence(batchSize, np.arange(startFrame, endFrame), frameShape, GetSampleMaps(frameShape, setDescription, shuffleSeed))
+# sampleGenerator = SampleSequence(batchSize, np.arange(startFrame, endFrame), frameShape, GetSampleMaps(frameShape, setDescription, shuffleSeed))
 
-dataExample = sampleGenerator.__getitem__(0)[0]['input_0'][0]
-frameShape = dataExample.shape
+# dataExample = sampleGenerator.__getitem__(0)[0]['input_0'][0]
+# frameShape = dataExample.shape
 
-batchPerFrame = (frameShape[0] * frameShape[1])//batchSize
-if randomSample :
-  testFrame = random.randint(startFrame, endFrame)
-  testBatch = random.randint(0, batchPerFrame)
-  testElement = random.randint(0, batchSize)
-else :
-  testFrame = sample - startFrame
-  testBatch = random.randint(0, batchPerFrame)
-  testElement = random.randint(0, batchSize)
+# batchPerFrame = (frameShape[0] * frameShape[1])//batchSize
+# if randomSample :
+#   testFrame = random.randint(startFrame, endFrame)
+#   testBatch = random.randint(0, batchPerFrame)
+#   testElement = random.randint(0, batchSize)
+# else :
+#   testFrame = sample - startFrame
+#   testBatch = random.randint(0, batchPerFrame)
+#   testElement = random.randint(0, batchSize)
 
-example = sampleGenerator.__getitem__(testFrame * batchPerFrame + testBatch)
+# example = sampleGenerator.__getitem__(testFrame * batchPerFrame + testBatch)
 
 # testPredict = model.predict(example[0])
-testLoss = model.evaluate_generator(testGenerator)
+# testLoss = model.evaluate_generator(testGenerator)
 
 # Display sample results for debugging purpose
 # print("Test color : ", testPredict)
 # print("Expected color : ", example[1])
-print("Test loss : ", testLoss)
+# print("Test loss : ", testLoss)
 
-start = perf_counter_ns()
-batchPredict = model.predict_generator(testGenerator)[testElement]
-end = perf_counter_ns()
+# start = perf_counter_ns()
+# batchPredict = model.predict_generator(testGenerator)[testElement]
+# end = perf_counter_ns()
 
-print("Time per image: {:.2f}ms ".format((end-start)/(examplesCount*testSetFraction)/1000000.0))
+# print("Time per image: {:.2f}ms ".format((end-start)/(examplesCount*testSetFraction)/1000000.0))
 
 #-------------------------Test Render--------------------------#
 
@@ -432,16 +469,17 @@ if testRender:
   render_2SceneDepth = np.zeros((frameShape[0] + 2 * padSize, frameShape[1] + 2 * padSize, 1))
 
   render_0SceneColor[padSize:padSize + frameShape[0], padSize:padSize + frameShape[1]] = \
-    (imageio.imread('D:/Bachelor_resources/Capture1/Capture1_SceneColor_0839.png')[:,:,:3]/255.0).astype('float16')
+    (imageio.imread('D:/Bachelor_resources/Capture1/Capture1_SceneColor_0839.png')[:,:,:3]/255.0).astype('uint8')
   render_0SceneDepth[padSize:padSize + frameShape[0], padSize:padSize + frameShape[1]] = \
-    (imageio.imread('D:/Bachelor_resources/Capture1/Capture1_SceneDepth_0839.hdr')[:,:,:1]/3000.0).astype('float16')
+    (imageio.imread('D:/Bachelor_resources/Capture1/Capture1_SceneDepth_0839.hdr')[:,:,:1]/3000.0).astype('float32')
   render_1SceneDepth[padSize:padSize + frameShape[0], padSize:padSize + frameShape[1]] = \
-    (imageio.imread('D:/Bachelor_resources/Capture1/Capture1_SceneDepth_0838.hdr')[:,:,:1]/3000.0).astype('float16')
+    (imageio.imread('D:/Bachelor_resources/Capture1/Capture1_SceneDepth_0838.hdr')[:,:,:1]/3000.0).astype('float32')
   render_2SceneDepth[padSize:padSize + frameShape[0], padSize:padSize + frameShape[1]] = \
-    (imageio.imread('D:/Bachelor_resources/Capture1/Capture1_SceneDepth_0837.hdr')[:,:,:1]/3000.0).astype('float16')
+    (imageio.imread('D:/Bachelor_resources/Capture1/Capture1_SceneDepth_0837.hdr')[:,:,:1]/3000.0).astype('float32')
   
-  renderGenerator = MakeRenderGenerator(render_0SceneColor, render_0SceneDepth, render_1SceneDepth, render_2SceneDepth, frameShape)
-  renderedImage = model.predict_generator(renderGenerator, steps=frameShape[0])
+  rowSteps = 10
+  renderGenerator = MakeRenderGenerator(render_0SceneColor, render_0SceneDepth, render_1SceneDepth, render_2SceneDepth, frameShape, rowSteps)
+  renderedImage = model.predict_generator(renderGenerator, steps=frameShape[0] * rowSteps)
 
 
   finalImage = np.reshape(renderedImage, frameShape)
@@ -456,11 +494,22 @@ if testRender:
 
   # Compute pixel loss
   renderLoss = RenderLoss(render_0FinalImage, finalImage)
+  baseVariation = RenderLoss(render_0FinalImage, \
+    imageio.imread('D:/Bachelor_resources/Capture1/Capture1_SceneColor_0839.png')[:,:,:3])
+  maxLoss = np.amax(renderLoss)
 
-  plt.imshow(renderLoss)/np.amax(renderLoss)
+  plt.imshow(renderLoss/maxLoss)
+  
+  fileNumber = 0
+  while (modelName + "_Render_{}.png".format(GetFrameString(fileNumber, 2))) in os.listdir(resourcesFolder + "Renders/"):
+    fileNumber += 1
+  
+  fileNumberString = GetFrameString(fileNumber, 2)
 
   # Export frame data
-  imageio.imwrite(resourcesFolder + modelName + "_Render_0.png", finalImage/255)
-  imageio.imwrite(resourcesFolder + modelName + "_LossRender_0.png", renderLoss/np.amax(renderLoss))
+  imageio.imwrite(resourcesFolder + "Renders/" + modelName + "_Render_{}.png".format(fileNumberString), finalImage/255)
+  imageio.imwrite(resourcesFolder + "Renders/" + modelName + "_LossRender_{}.png".format(fileNumberString), renderLoss/maxLoss)
+  imageio.imwrite(resourcesFolder + "Renders/" + modelName + "_BaseVariation_{}.png".format(fileNumberString), renderLoss/maxLoss)
+  print("Max loss : {}".format(maxLoss))
 
 #--------------------------------------------------------------#
