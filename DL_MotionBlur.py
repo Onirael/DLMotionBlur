@@ -1,6 +1,8 @@
 from matplotlib import pyplot as plt
 import numpy as np
 import tensorflow as tf
+import tensorflow.keras.backend as K
+from tensorflow.keras.mixed_precision.experimental import LossScaleOptimizer
 from tensorflow.keras.optimizers import RMSprop
 from tensorflow.keras.models import load_model
 from tensorflow.keras.callbacks import ModelCheckpoint
@@ -269,6 +271,9 @@ if (debugSample) :
 
 #---------------------TensorFlow model----------------------#
 
+K.set_floatx('float16')
+K.set_epsilon(1e-8)
+
 input0 = tf.keras.Input(shape=(dataShape, dataShape, 3), name='input_0', dtype='float16') #Scene color
 input1 = tf.keras.Input(shape=(dataShape, dataShape, 1), name='input_1', dtype='float16') #Depth 0
 input2 = tf.keras.Input(shape=(dataShape, dataShape, 1), name='input_2', dtype='float16') #Depth -1
@@ -329,10 +334,11 @@ else :
 
   #--------------------------------#
 
-model.compile(loss=Loss, 
-  optimizer=RMSprop(lr=learningRate, epsilon=1e-4))
+# model.compile(loss=Loss, 
+#   optimizer=RMSprop(lr=learningRate, epsilon=1e-4))
 
-tf.keras.backend.set_epsilon(1e-8)
+model.compile(loss=Loss,
+  optimizer=LossScaleOptimizer(RMSprop(lr=learningRate, epsilon=1e-4), 1000))
 
 model.summary()
 
