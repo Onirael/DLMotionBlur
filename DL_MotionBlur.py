@@ -17,9 +17,9 @@ dataShape = 201 # Convolution K size
 
 # Training
 trainModel = True
-modelFromFile = False
+modelFromFile = True
 trainFromCheckpoint = False
-batchSize = 200
+batchSize = 128
 trainEpochs = 15
 stride = 99
 learningRate = 0.001
@@ -45,6 +45,7 @@ filePrefix = 'Capture1_'
 
 # Model output
 modelName = "3Depth_K201_selectedExamples"
+modelFileName = resourcesFolder + modelName + ".nn"
 weightsFileName = resourcesFolder + modelName + "_Weights.h5"
 graphDataFileName = resourcesFolder + modelName + "_GraphData.dat"
 
@@ -59,6 +60,53 @@ session = tf.compat.v1.Session(config=config)
 trainCheckpoint = ModelCheckpoint(weightsFileName, verbose=0, save_weights_only=True)
 
 #-----------------------Keras Sequence----------------------#
+
+def MakeModel(inputs) :
+  #-Definition---------------------#
+
+  #Input1
+  x = tf.keras.layers.MaxPooling2D(2,2)(inputs[1])
+  x = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(x)
+  x = tf.keras.layers.MaxPooling2D(4,4)(x)
+  x = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(x)
+  x = tf.keras.layers.MaxPooling2D(2,2)(x)
+  x = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(x)
+  x = tf.keras.layers.Flatten()(x)
+  x = tf.keras.Model(inputs=input1, outputs=x)
+
+  #Input2
+  y = tf.keras.layers.MaxPooling2D(2,2)(inputs[2])
+  y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
+  y = tf.keras.layers.MaxPooling2D(4,4)(y)
+  y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
+  y = tf.keras.layers.MaxPooling2D(2,2)(y)
+  y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
+  y = tf.keras.layers.Flatten()(y)
+  y = tf.keras.Model(inputs=input2, outputs=y)
+
+  #Input3
+  z = tf.keras.layers.MaxPooling2D(2,2)(inputs[3])
+  z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
+  z = tf.keras.layers.MaxPooling2D(4,4)(z)
+  z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
+  z = tf.keras.layers.MaxPooling2D(2,2)(z)
+  z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
+  z = tf.keras.layers.Flatten()(z)
+  z = tf.keras.Model(inputs=input3, outputs=z)
+
+  #Combine inputs
+  combined = tf.keras.layers.concatenate([x.output, y.output, z.output])
+
+  #Common network
+  n = tf.keras.layers.Dense(256, activation='relu')(combined)
+  n = tf.keras.layers.Dense(dataShape**2, activation='linear')(n)
+  n = tf.keras.layers.ReLU()(n)
+  n = tf.keras.layers.Lambda(lambda l: ApplyKernel(inputs[0], l))(n)
+
+  #Model
+  model = tf.keras.Model(inputs=[input0, x.input, y.input, z.input], outputs=n, name=modelName)
+
+  return model
 
 class SampleSequence(tf.keras.utils.Sequence) :
   def __init__(self, batch_size, frames, frameShape, sampleMaps, stride=1) :
@@ -281,58 +329,13 @@ input3 = tf.keras.Input(shape=(dataShape, dataShape, 1), name='input_3', dtype='
 
 if modelFromFile :
   # load json and create model
-  with open(resourcesFolder + modelName + '.json', 'r') as json_file :
-    loaded_model_json = json_file.read()
-
-  model = tf.keras.models.model_from_json(loaded_model_json)
+  with open(modelFileName, 'rb') as modelFile :
+    MakeModel = pickle.load(modelFile)
+  
+  model = MakeModel([input0, input1, input2, input3])
   print("Loaded model from disk")
-
 else :
-  #-Definition---------------------#
-
-  #Input1
-  x = tf.keras.layers.MaxPooling2D(2,2)(input1)
-  x = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(x)
-  x = tf.keras.layers.MaxPooling2D(4,4)(x)
-  x = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(x)
-  x = tf.keras.layers.MaxPooling2D(2,2)(x)
-  x = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(x)
-  x = tf.keras.layers.Flatten()(x)
-  x = tf.keras.Model(inputs=input1, outputs=x)
-
-  #Input2
-  y = tf.keras.layers.MaxPooling2D(2,2)(input2)
-  y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
-  y = tf.keras.layers.MaxPooling2D(4,4)(y)
-  y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
-  y = tf.keras.layers.MaxPooling2D(2,2)(y)
-  y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
-  y = tf.keras.layers.Flatten()(y)
-  y = tf.keras.Model(inputs=input2, outputs=y)
-
-  #Input3
-  z = tf.keras.layers.MaxPooling2D(2,2)(input3)
-  z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
-  z = tf.keras.layers.MaxPooling2D(4,4)(z)
-  z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
-  z = tf.keras.layers.MaxPooling2D(2,2)(z)
-  z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
-  z = tf.keras.layers.Flatten()(z)
-  z = tf.keras.Model(inputs=input3, outputs=z)
-
-  #Combine inputs
-  combined = tf.keras.layers.concatenate([x.output, y.output, z.output])
-
-  #Common network
-  n = tf.keras.layers.Dense(256, activation='relu')(combined)
-  n = tf.keras.layers.Dense(dataShape**2, activation='linear')(n)
-  n = tf.keras.layers.ReLU()(n)
-  n = tf.keras.layers.Lambda(lambda l: ApplyKernel(input0, l))(n)
-
-  #Model
-  model = tf.keras.Model(inputs=[input0, x.input, y.input, z.input], outputs=n, name=modelName)
-
-  #--------------------------------#
+  model = MakeModel([input0, input1, input2, input3])
 
 # model.compile(loss=Loss, 
 #   optimizer=RMSprop(lr=learningRate, epsilon=1e-4))
@@ -343,10 +346,8 @@ model.compile(loss=Loss,
 model.summary()
 
 if not modelFromFile :
-  # serialize model to JSON
-  model_json = model.to_json()
-  with open(resourcesFolder + modelName + ".json", "w") as json_file:
-      json_file.write(model_json)
+  with open(modelFileName, 'wb') as modelFile :
+    pickle.dump(MakeModel, modelFile)
   
   print("Saved model to disk")
 
