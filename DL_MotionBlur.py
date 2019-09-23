@@ -396,39 +396,6 @@ if (lossGraph) :
   plt.ylim(0, 70)
   plt.show()
 
-#--------------------------Test Model--------------------------#
-
-sampleGenerator = SampleSequence(batchSize, np.arange(startFrame, endFrame), frameShape, GetSampleMaps(frameShape, setDescription, shuffleSeed))
-
-dataExample = sampleGenerator.__getitem__(0)[0]['input_0'][0]
-frameShape = dataExample.shape
-
-batchPerFrame = (frameShape[0] * frameShape[1])//batchSize
-if randomSample :
-  testFrame = random.randint(startFrame, endFrame)
-  testBatch = random.randint(0, batchPerFrame)
-  testElement = random.randint(0, batchSize)
-else :
-  testFrame = sample - startFrame
-  testBatch = random.randint(0, batchPerFrame)
-  testElement = random.randint(0, batchSize)
-
-example = sampleGenerator.__getitem__(testFrame * batchPerFrame + testBatch)
-
-# testPredict = model.predict(example[0])
-testLoss = model.evaluate_generator(testGenerator)
-
-# Display sample results for debugging purpose
-# print("Test color : ", testPredict)
-# print("Expected color : ", example[1])
-print("Test loss : ", testLoss)
-
-start = perf_counter_ns()
-batchPredict = model.predict_generator(testGenerator)[testElement]
-end = perf_counter_ns()
-
-print("Time per image: {:.2f}ms ".format((end-start)/(examplesCount*testSetFraction)/1000000.0))
-
 #-------------------------Test Render--------------------------#
 
 if testRender:
@@ -454,8 +421,10 @@ if testRender:
   
   rowSteps = 10
   renderGenerator = MakeRenderGenerator(render_0SceneColor, render_0SceneDepth, render_1SceneDepth, render_2SceneDepth, frameShape, rowSteps)
+  start = perf_counter_ns()
   renderedImage = model.predict_generator(renderGenerator, steps=frameShape[0] * rowSteps)
-
+  end = perf_counter_ns()
+  print("Time per sample: {:.2f}ms ".format((end-start)/(renderedImage.shape[0] * renderedImage.shape[1] *1000000.0)))
 
   finalImage = np.reshape(renderedImage, frameShape)
 
