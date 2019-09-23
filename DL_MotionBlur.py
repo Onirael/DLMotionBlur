@@ -18,9 +18,9 @@ dataShape = 201 # Convolution K size
 # Training
 trainModel = True
 modelFromFile = False
-trainFromCheckpoint = False
+trainFromCheckpoint = True
 batchSize = 200
-trainEpochs = 15
+trainEpochs = 10
 stride = 99
 learningRate = 0.001
 saveFiles = True
@@ -45,8 +45,9 @@ filePrefix = 'Capture1_'
 
 # Model output
 modelName = "3Depth_K201_selectedExamples"
+weightsInFile = resourcesFolder + "Backup_weights/" + "3Depth_K201_selectedExamples_epoch5_Weights.h5"
 weightsFileName = resourcesFolder + "Weights/" + modelName + "_Weights.h5"
-graphDataFileName = resourcesFolder + "Graphs/" modelName + "_GraphData.dat"
+graphDataFileName = resourcesFolder + "Graphs/" + modelName + "_GraphData.dat"
 
 #------------------------TF session-------------------------#
 
@@ -57,6 +58,7 @@ session = tf.compat.v1.Session(config=config)
 #-----------------------Keras Callback----------------------#
 
 trainCheckpoint = ModelCheckpoint(weightsFileName, verbose=0, save_weights_only=True)
+backupCheckpoint = ModelCheckpoint(resourcesFolder + "Weights/" + modelName + "_{epoch:02d}" + "_Weights.h5", verbose=0, save_weights_only=True)
 
 #-----------------------Keras Sequence----------------------#
 
@@ -352,7 +354,7 @@ if not modelFromFile :
 
 if trainModel :
   if trainFromCheckpoint :
-    model.load_weights(weightsFileName)
+    model.load_weights(weightsInFile)
 
   training = model.fit_generator(
     trainGenerator,
@@ -375,7 +377,7 @@ if trainModel :
     print("Saved weights to file")
 
 else :
-  model.load_weights(weightsFileName)
+  model.load_weights(weightsInFile)
   if lossGraph :
     with open(graphDataFileName, 'rb') as graphDataFile :
       training_loss, test_loss, epoch_count, trainingSetSize = pickle.load(graphDataFile)
