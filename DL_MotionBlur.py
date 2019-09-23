@@ -425,7 +425,7 @@ if testRender:
   start = perf_counter_ns()
   renderedImage = model.predict_generator(renderGenerator, steps=frameShape[0] * rowSteps)
   end = perf_counter_ns()
-  print("Time per sample: {:.2f}ms ".format((end-start)/(renderedImage.shape[0] * renderedImage.shape[1] *1000000.0))
+  print("Time per sample: {:.2f}ms ".format((end-start)/(renderedImage.shape[0] * renderedImage.shape[1] *1000000.0)))
 
 
   finalImage = np.reshape(renderedImage, frameShape)
