@@ -8,7 +8,7 @@ from tensorflow.keras.optimizers import RMSprop
 from tensorflow.keras.models import load_model
 from tensorflow.keras.callbacks import ModelCheckpoint
 from time import perf_counter_ns
-import os, math, random, imageio, pickle
+import os, math, random, imageio, pickle, importlib
 import tensorflow.python.util.deprecation as deprecation
 deprecation._PRINT_DEPRECATION_WARNINGS = False
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
@@ -19,7 +19,7 @@ dataShape = 201 # Convolution K size
 # Training
 trainModel = False
 modelFromFile = True
-trainFromCheckpoint = False
+trainFromCheckpoint = True
 batchSize = 128
 trainEpochs = 15
 stride = 100
@@ -47,7 +47,6 @@ filePrefix = 'Capture1_'
 # Model output
 modelName = "3Depth_K201_selectedExamples"
 
-modelFileName = resourcesFolder + "Models/" + modelName + ".nn"
 weightsInFile = resourcesFolder + "Weights/" + modelName + "_Weights.h5"
 weightsFileName = resourcesFolder + "Weights/" + modelName + "_Weights.h5"
 graphDataFileName = resourcesFolder + "Graphs/" + modelName + "_GraphData.dat"
@@ -71,30 +70,30 @@ def MakeModel(inputs) :
   #Input1
   x = tf.keras.layers.MaxPooling2D(2,2)(inputs[1])
   x = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(x)
-  x = tf.keras.layers.MaxPooling2D(4,4)(x)
-  x = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(x)
   x = tf.keras.layers.MaxPooling2D(2,2)(x)
   x = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(x)
+  # x = tf.keras.layers.MaxPooling2D(2,2)(x)
+  # x = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(x)
   x = tf.keras.layers.Flatten()(x)
   x = tf.keras.Model(inputs=input1, outputs=x)
 
   #Input2
   y = tf.keras.layers.MaxPooling2D(2,2)(inputs[2])
   y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
-  y = tf.keras.layers.MaxPooling2D(4,4)(y)
-  y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
   y = tf.keras.layers.MaxPooling2D(2,2)(y)
   y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
+  # y = tf.keras.layers.MaxPooling2D(2,2)(y)
+  # y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
   y = tf.keras.layers.Flatten()(y)
   y = tf.keras.Model(inputs=input2, outputs=y)
 
   #Input3
   z = tf.keras.layers.MaxPooling2D(2,2)(inputs[3])
   z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
-  z = tf.keras.layers.MaxPooling2D(4,4)(z)
-  z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
   z = tf.keras.layers.MaxPooling2D(2,2)(z)
   z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
+  # z = tf.keras.layers.MaxPooling2D(2,2)(z)
+  # z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
   z = tf.keras.layers.Flatten()(z)
   z = tf.keras.Model(inputs=input3, outputs=z)
 
@@ -335,11 +334,8 @@ input2 = tf.keras.Input(shape=(dataShape, dataShape, 1), name='input_2', dtype='
 input3 = tf.keras.Input(shape=(dataShape, dataShape, 1), name='input_3', dtype='float16') #Depth -2
 
 if modelFromFile :
-  # load json and create model
-  with open(modelFileName, 'rb') as modelFile :
-    MakeModel = pickle.load(modelFile)
-  
-  model = MakeModel([input0, input1, input2, input3])
+  modelFunc = importlib.import_module('Models.' + modelName)
+  model = modelFunc.MakeModel([input0, input1, input2, input3], dataShape, modelName, ApplyKernel)
   print("Loaded model from disk")
 else :
   model = MakeModel([input0, input1, input2, input3])
@@ -351,12 +347,6 @@ model.compile(loss=Loss,
   optimizer=LossScaleOptimizer(RMSprop(lr=learningRate, epsilon=1e-4), 1000))
 
 model.summary()
-
-if not modelFromFile :
-  with open(modelFileName, 'wb') as modelFile :
-    pickle.dump(MakeModel, modelFile)
-  
-  print("Saved model to disk")
 
 if trainModel :
   if trainFromCheckpoint :
@@ -423,7 +413,7 @@ if testRender:
   render_2SceneDepth[padSize:padSize + frameShape[0], padSize:padSize + frameShape[1]] = \
     (imageio.imread('D:/Bachelor_resources/Capture1/Capture1_SceneDepth_0837.hdr')[:,:,:1]/3000.0).astype('float32')
   
-  rowSteps = 100
+  rowSteps = 20
   renderGenerator = MakeRenderGenerator(render_0SceneColor, render_0SceneDepth, render_1SceneDepth, render_2SceneDepth, frameShape, rowSteps)
   
   start = perf_counter_ns()
