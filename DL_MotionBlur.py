@@ -186,7 +186,7 @@ def GetSampleMaps(frameShape, frames, seed) :
   return sampleMaps.astype('uint32')
 
 def GetFrameString(frameNumber, digitFormat) : # Returns a string of the frame number with the correct amount of digits
-  if math.log(frameNumber, 10) > digitFormat :
+  if frameNumber > 0 and math.log(frameNumber, 10) > digitFormat :
     raise ValueError("Digit format is too small for the frame number, {} for frame number {}".format(digitFormat, frameNumber))
 
   frameString = str(frameNumber)
