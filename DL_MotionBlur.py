@@ -45,8 +45,8 @@ filePrefix = 'Capture1_'
 
 # Model output
 modelName = "3Depth_K201_selectedExamples"
-weightsFileName = resourcesFolder + modelName + "_Weights.h5"
-graphDataFileName = resourcesFolder + modelName + "_GraphData.dat"
+weightsFileName = resourcesFolder + "Weights/" + modelName + "_Weights.h5"
+graphDataFileName = resourcesFolder + "Graphs/" modelName + "_GraphData.dat"
 
 #------------------------TF session-------------------------#
 
