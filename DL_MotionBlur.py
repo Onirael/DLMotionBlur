@@ -14,7 +14,11 @@ deprecation._PRINT_DEPRECATION_WARNINGS = False
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 os.environ['TF_ENABLE_AUTO_MIXED_PRECISION'] = '1'
 
+<<<<<<< HEAD
 dataShape = 51 # Convolution K size
+=======
+dataShape = 101 # Convolution K size
+>>>>>>> 84681792d3a452f5f5f42fa860258cb5aa8c5d59
 
 # Training
 trainModel = True
@@ -256,8 +260,8 @@ def RenderLoss(y_true, y_pred) :
 
 np.random.seed(shuffleSeed)
 setDescription = np.random.randint(startFrame, endFrame, setCount) # Contains a random sample of frames to use as a data set
-# setDescription = np.array([291, 376, 335, 412, 550, 623, 742, 589, 749, 760, 766, 471, 772, 787, 710, 813, 830, 844, 997, 856, 999, 800, 541, 271])
-setCount = len(setDescription)
+setDescription = np.append(setDescription, [291, 335, 412, 550, 623, 742, 749, 760, 766, 772, 787, 813, 830, 844, 856, 999, 800, 541])
+# setCount = len(setDescription)
 frameShape = imageio.imread(workDirectory + 'SceneDepth/' + filePrefix + 'SceneDepth_' + GetFrameString(setDescription[0], digitFormat) + '.hdr').shape # Test image for shape
 
 examplesCount = setCount * frameShape[0] * frameShape[1] /stride
