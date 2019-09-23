@@ -1,3 +1,4 @@
+print("Importing modules...")
 from matplotlib import pyplot as plt
 import numpy as np
 import tensorflow as tf
@@ -13,11 +14,11 @@ deprecation._PRINT_DEPRECATION_WARNINGS = False
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 os.environ['TF_ENABLE_AUTO_MIXED_PRECISION'] = '1'
 
-dataShape = 51 # Convolution K size
+dataShape = 201 # Convolution K size
 
 # Training
-trainModel = True
-modelFromFile = False
+trainModel = False
+modelFromFile = True
 trainFromCheckpoint = False
 batchSize = 128
 trainEpochs = 15
@@ -28,7 +29,7 @@ saveFiles = True
 shuffleSeed = 36
 
 # Debug & Visualization
-lossGraph = True
+lossGraph = False
 testRender = True
 debugSample = False
 randomSample = False
@@ -44,10 +45,10 @@ workDirectory = resourcesFolder  + 'Capture1_Sorted/'
 filePrefix = 'Capture1_'
 
 # Model output
-modelName = "3Depth_K51"
+modelName = "3Depth_K201_selectedExamples"
 
 modelFileName = resourcesFolder + "Models/" + modelName + ".nn"
-weightsInFile = resourcesFolder + "Backup_weights/" + modelName + "_Weights.h5"
+weightsInFile = resourcesFolder + "Weights/" + modelName + "_Weights.h5"
 weightsFileName = resourcesFolder + "Weights/" + modelName + "_Weights.h5"
 graphDataFileName = resourcesFolder + "Graphs/" + modelName + "_GraphData.dat"
 
@@ -70,20 +71,20 @@ def MakeModel(inputs) :
   #Input1
   x = tf.keras.layers.MaxPooling2D(2,2)(inputs[1])
   x = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(x)
+  x = tf.keras.layers.MaxPooling2D(4,4)(x)
+  x = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(x)
   x = tf.keras.layers.MaxPooling2D(2,2)(x)
   x = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(x)
-  # x = tf.keras.layers.MaxPooling2D(2,2)(x)
-  # x = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(x)
   x = tf.keras.layers.Flatten()(x)
   x = tf.keras.Model(inputs=input1, outputs=x)
 
   #Input2
   y = tf.keras.layers.MaxPooling2D(2,2)(inputs[2])
   y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
+  y = tf.keras.layers.MaxPooling2D(4,4)(y)
+  y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
   y = tf.keras.layers.MaxPooling2D(2,2)(y)
   y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
-  # y = tf.keras.layers.MaxPooling2D(2,2)(y)
-  # y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
   y = tf.keras.layers.Flatten()(y)
   y = tf.keras.Model(inputs=input2, outputs=y)
 
@@ -92,8 +93,8 @@ def MakeModel(inputs) :
   z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
   z = tf.keras.layers.MaxPooling2D(4,4)(z)
   z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
-  # z = tf.keras.layers.MaxPooling2D(2,2)(z)
-  # z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
+  z = tf.keras.layers.MaxPooling2D(2,2)(z)
+  z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
   z = tf.keras.layers.Flatten()(z)
   z = tf.keras.Model(inputs=input3, outputs=z)
 
@@ -213,27 +214,30 @@ def PadImage(image, sampleSize) : # Returns the image with a sampleSize large pa
 
   return paddedImage
 
-def MakeRenderGenerator(sceneColor, sceneDepth0, sceneDepth1, sceneDepth2, frameShape, verbose=True) :
+def MakeRenderGenerator(sceneColor, sceneDepth0, sceneDepth1, sceneDepth2, frameShape, rowSteps=4, verbose=True) :
 
   for row in range(frameShape[0]) :
     if verbose:
       print("Rendering... ({:.2f}%)".format(row/frameShape[0] * 100), end="\r")
 
-    curRow = \
-    {
-      'input_0' : np.zeros((frameShape[1], dataShape, dataShape, 3)),
-      'input_1' : np.zeros((frameShape[1], dataShape, dataShape, 1)),
-      'input_2' : np.zeros((frameShape[1], dataShape, dataShape, 1)),
-      'input_3' : np.zeros((frameShape[1], dataShape, dataShape, 1)),
-    }
+    batchSize = math.floor(frameShape[1]/rowSteps)
 
-    for column in range(frameShape[1]) :
-      curRow['input_0'][column] = sceneColor[row:dataShape + row, column:dataShape + column]
-      curRow['input_1'][column] = sceneDepth0[row:dataShape + row, column:dataShape + column]
-      curRow['input_2'][column] = sceneDepth1[row:dataShape + row, column:dataShape + column]
-      curRow['input_3'][column] = sceneDepth2[row:dataShape + row, column:dataShape + column]
-    
-    yield curRow
+    for columnStep in range(rowSteps) :
+      curRow = \
+      {
+        'input_0' : np.zeros((batchSize, dataShape, dataShape, 3)),
+        'input_1' : np.zeros((batchSize, dataShape, dataShape, 1)),
+        'input_2' : np.zeros((batchSize, dataShape, dataShape, 1)),
+        'input_3' : np.zeros((batchSize, dataShape, dataShape, 1)),
+      }
+      for batchColumn in range(batchSize) :
+        column = columnStep * batchSize + batchColumn
+        curRow['input_0'][batchColumn] = sceneColor[row:dataShape + row, column:dataShape + column]
+        curRow['input_1'][batchColumn] = sceneDepth0[row:dataShape + row, column:dataShape + column]
+        curRow['input_2'][batchColumn] = sceneDepth1[row:dataShape + row, column:dataShape + column]
+        curRow['input_3'][batchColumn] = sceneDepth2[row:dataShape + row, column:dataShape + column]
+
+      yield curRow
 
 def ApplyKernel(image, flatKernel) : # Applies convolution kernel to same shaped image
   global dataShape
@@ -419,7 +423,7 @@ if testRender:
   render_2SceneDepth[padSize:padSize + frameShape[0], padSize:padSize + frameShape[1]] = \
     (imageio.imread('D:/Bachelor_resources/Capture1/Capture1_SceneDepth_0837.hdr')[:,:,:1]/3000.0).astype('float32')
   
-  rowSteps = 10
+  rowSteps = 100
   renderGenerator = MakeRenderGenerator(render_0SceneColor, render_0SceneDepth, render_1SceneDepth, render_2SceneDepth, frameShape, rowSteps)
   
   start = perf_counter_ns()
