@@ -440,16 +440,17 @@ if testRender:
   render_2SceneDepth = np.zeros((frameShape[0] + 2 * padSize, frameShape[1] + 2 * padSize, 1))
 
   render_0SceneColor[padSize:padSize + frameShape[0], padSize:padSize + frameShape[1]] = \
-    (imageio.imread('D:/Bachelor_resources/Capture1/Capture1_SceneColor_0839.png')[:,:,:3]/255.0).astype('float16')
+    (imageio.imread('D:/Bachelor_resources/Capture1/Capture1_SceneColor_0839.png')[:,:,:3]/255.0).astype('uint8')
   render_0SceneDepth[padSize:padSize + frameShape[0], padSize:padSize + frameShape[1]] = \
-    (imageio.imread('D:/Bachelor_resources/Capture1/Capture1_SceneDepth_0839.hdr')[:,:,:1]/3000.0).astype('float16')
+    (imageio.imread('D:/Bachelor_resources/Capture1/Capture1_SceneDepth_0839.hdr')[:,:,:1]/3000.0).astype('float32')
   render_1SceneDepth[padSize:padSize + frameShape[0], padSize:padSize + frameShape[1]] = \
-    (imageio.imread('D:/Bachelor_resources/Capture1/Capture1_SceneDepth_0838.hdr')[:,:,:1]/3000.0).astype('float16')
+    (imageio.imread('D:/Bachelor_resources/Capture1/Capture1_SceneDepth_0838.hdr')[:,:,:1]/3000.0).astype('float32')
   render_2SceneDepth[padSize:padSize + frameShape[0], padSize:padSize + frameShape[1]] = \
-    (imageio.imread('D:/Bachelor_resources/Capture1/Capture1_SceneDepth_0837.hdr')[:,:,:1]/3000.0).astype('float16')
+    (imageio.imread('D:/Bachelor_resources/Capture1/Capture1_SceneDepth_0837.hdr')[:,:,:1]/3000.0).astype('float32')
   
-  renderGenerator = MakeRenderGenerator(render_0SceneColor, render_0SceneDepth, render_1SceneDepth, render_2SceneDepth, frameShape)
-  renderedImage = model.predict_generator(renderGenerator, steps=frameShape[0])
+  rowSteps = 10
+  renderGenerator = MakeRenderGenerator(render_0SceneColor, render_0SceneDepth, render_1SceneDepth, render_2SceneDepth, frameShape, rowSteps)
+  renderedImage = model.predict_generator(renderGenerator, steps=frameShape[0] * rowSteps)
 
 
   finalImage = np.reshape(renderedImage, frameShape)
@@ -464,11 +465,22 @@ if testRender:
 
   # Compute pixel loss
   renderLoss = RenderLoss(render_0FinalImage, finalImage)
+  baseVariation = RenderLoss(render_0FinalImage, \
+    imageio.imread('D:/Bachelor_resources/Capture1/Capture1_SceneColor_0839.png')[:,:,:3])
+  maxLoss = np.amax(renderLoss)
 
-  plt.imshow(renderLoss)/np.amax(renderLoss)
+  plt.imshow(renderLoss/maxLoss)
+  
+  fileNumber = 0
+  while (modelName + "_Render_{}.png".format(GetFrameString(fileNumber, 2))) in os.listdir(resourcesFolder + "Renders/"):
+    fileNumber += 1
+  
+  fileNumberString = GetFrameString(fileNumber, 2)
 
   # Export frame data
-  imageio.imwrite(resourcesFolder + modelName + "_Render_0.png", finalImage/255)
-  imageio.imwrite(resourcesFolder + modelName + "_LossRender_0.png", renderLoss/np.amax(renderLoss))
+  imageio.imwrite(resourcesFolder + "Renders/" + modelName + "_Render_{}.png".format(fileNumberString), finalImage/255)
+  imageio.imwrite(resourcesFolder + "Renders/" + modelName + "_LossRender_{}.png".format(fileNumberString), renderLoss/maxLoss)
+  imageio.imwrite(resourcesFolder + "Renders/" + modelName + "_BaseVariation_{}.png".format(fileNumberString), renderLoss/maxLoss)
+  print("Max loss : {}".format(maxLoss))
 
 #--------------------------------------------------------------#
