@@ -213,27 +213,30 @@ def PadImage(image, sampleSize) : # Returns the image with a sampleSize large pa
 
   return paddedImage
 
-def MakeRenderGenerator(sceneColor, sceneDepth0, sceneDepth1, sceneDepth2, frameShape, verbose=True) :
+def MakeRenderGenerator(sceneColor, sceneDepth0, sceneDepth1, sceneDepth2, frameShape, rowSteps=4, verbose=True) :
 
   for row in range(frameShape[0]) :
     if verbose:
       print("Rendering... ({:.2f}%)".format(row/frameShape[0] * 100), end="\r")
 
-    curRow = \
-    {
-      'input_0' : np.zeros((frameShape[1], dataShape, dataShape, 3)),
-      'input_1' : np.zeros((frameShape[1], dataShape, dataShape, 1)),
-      'input_2' : np.zeros((frameShape[1], dataShape, dataShape, 1)),
-      'input_3' : np.zeros((frameShape[1], dataShape, dataShape, 1)),
-    }
+    batchSize = math.floor(frameShape[1]/rowSteps)
 
-    for column in range(frameShape[1]) :
-      curRow['input_0'][column] = sceneColor[row:dataShape + row, column:dataShape + column]
-      curRow['input_1'][column] = sceneDepth0[row:dataShape + row, column:dataShape + column]
-      curRow['input_2'][column] = sceneDepth1[row:dataShape + row, column:dataShape + column]
-      curRow['input_3'][column] = sceneDepth2[row:dataShape + row, column:dataShape + column]
-    
-    yield curRow
+    for columnStep in range(rowSteps) :
+      curRow = \
+      {
+        'input_0' : np.zeros((batchSize, dataShape, dataShape, 3)),
+        'input_1' : np.zeros((batchSize, dataShape, dataShape, 1)),
+        'input_2' : np.zeros((batchSize, dataShape, dataShape, 1)),
+        'input_3' : np.zeros((batchSize, dataShape, dataShape, 1)),
+      }
+      for batchColumn in range(batchSize) :
+        column = columnStep * batchSize + batchColumn
+        curRow['input_0'][batchColumn] = sceneColor[row:dataShape + row, column:dataShape + column]
+        curRow['input_1'][batchColumn] = sceneDepth0[row:dataShape + row, column:dataShape + column]
+        curRow['input_2'][batchColumn] = sceneDepth1[row:dataShape + row, column:dataShape + column]
+        curRow['input_3'][batchColumn] = sceneDepth2[row:dataShape + row, column:dataShape + column]
+
+      yield curRow
 
 def ApplyKernel(image, flatKernel) : # Applies convolution kernel to same shaped image
   global dataShape
