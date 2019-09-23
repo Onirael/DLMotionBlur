@@ -13,22 +13,22 @@ deprecation._PRINT_DEPRECATION_WARNINGS = False
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 os.environ['TF_ENABLE_AUTO_MIXED_PRECISION'] = '1'
 
-dataShape = 201 # Convolution K size
+dataShape = 51 # Convolution K size
 
 # Training
 trainModel = True
-modelFromFile = True
+modelFromFile = False
 trainFromCheckpoint = False
 batchSize = 128
 trainEpochs = 15
-stride = 99
+stride = 50
 learningRate = 0.001
 saveFiles = True
 
 shuffleSeed = 36
 
 # Debug & Visualization
-lossGraph = False
+lossGraph = True
 testRender = True
 debugSample = False
 randomSample = False
@@ -44,12 +44,12 @@ workDirectory = resourcesFolder  + 'Capture1_Sorted/'
 filePrefix = 'Capture1_'
 
 # Model output
-modelName = "3Depth_K201_selectedExamples"
+modelName = "3Depth_K51_"
 
 modelFileName = resourcesFolder + "Models/" + modelName + ".nn"
-weightsInFile = resourcesFolder + "Backup_weights/" + "3Depth_K201_selectedExamples_epoch5_Weights.h5"
-weightsFileName = resourcesFolder + modelName + "_Weights.h5"
-graphDataFileName = resourcesFolder + modelName + "_GraphData.dat"
+weightsInFile = resourcesFolder + "Backup_weights/" + modelName + "_Weights.h5"
+weightsFileName = resourcesFolder + "Weights/" + modelName + "_Weights.h5"
+graphDataFileName = resourcesFolder + "Graphs/" + modelName + "_GraphData.dat"
 
 #------------------------TF session-------------------------#
 
@@ -396,39 +396,6 @@ if (lossGraph) :
   plt.ylim(0, 70)
   plt.show()
 
-#--------------------------Test Model--------------------------#
-
-sampleGenerator = SampleSequence(batchSize, np.arange(startFrame, endFrame), frameShape, GetSampleMaps(frameShape, setDescription, shuffleSeed))
-
-dataExample = sampleGenerator.__getitem__(0)[0]['input_0'][0]
-frameShape = dataExample.shape
-
-batchPerFrame = (frameShape[0] * frameShape[1])//batchSize
-if randomSample :
-  testFrame = random.randint(startFrame, endFrame)
-  testBatch = random.randint(0, batchPerFrame)
-  testElement = random.randint(0, batchSize)
-else :
-  testFrame = sample - startFrame
-  testBatch = random.randint(0, batchPerFrame)
-  testElement = random.randint(0, batchSize)
-
-example = sampleGenerator.__getitem__(testFrame * batchPerFrame + testBatch)
-
-# testPredict = model.predict(example[0])
-testLoss = model.evaluate_generator(testGenerator)
-
-# Display sample results for debugging purpose
-# print("Test color : ", testPredict)
-# print("Expected color : ", example[1])
-print("Test loss : ", testLoss)
-
-start = perf_counter_ns()
-batchPredict = model.predict_generator(testGenerator)[testElement]
-end = perf_counter_ns()
-
-print("Time per image: {:.2f}ms ".format((end-start)/(examplesCount*testSetFraction)/1000000.0))
-
 #-------------------------Test Render--------------------------#
 
 if testRender:
@@ -454,7 +421,11 @@ if testRender:
   
   rowSteps = 10
   renderGenerator = MakeRenderGenerator(render_0SceneColor, render_0SceneDepth, render_1SceneDepth, render_2SceneDepth, frameShape, rowSteps)
+  
+  start = perf_counter_ns()
   renderedImage = model.predict_generator(renderGenerator, steps=frameShape[0] * rowSteps)
+  end = perf_counter_ns()
+  print("Time per sample: {:.2f}ms ".format((end-start)/(renderedImage.shape[0] * renderedImage.shape[1] *1000000.0))
 
 
   finalImage = np.reshape(renderedImage, frameShape)
