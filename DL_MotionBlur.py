@@ -21,7 +21,7 @@ modelFromFile = False
 trainFromCheckpoint = False
 batchSize = 128
 trainEpochs = 15
-stride = 50
+stride = 100
 learningRate = 0.001
 saveFiles = True
 
@@ -44,7 +44,7 @@ workDirectory = resourcesFolder  + 'Capture1_Sorted/'
 filePrefix = 'Capture1_'
 
 # Model output
-modelName = "3Depth_K51_"
+modelName = "3Depth_K51"
 
 modelFileName = resourcesFolder + "Models/" + modelName + ".nn"
 weightsInFile = resourcesFolder + "Backup_weights/" + modelName + "_Weights.h5"
@@ -70,20 +70,20 @@ def MakeModel(inputs) :
   #Input1
   x = tf.keras.layers.MaxPooling2D(2,2)(inputs[1])
   x = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(x)
-  x = tf.keras.layers.MaxPooling2D(4,4)(x)
-  x = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(x)
   x = tf.keras.layers.MaxPooling2D(2,2)(x)
   x = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(x)
+  # x = tf.keras.layers.MaxPooling2D(2,2)(x)
+  # x = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(x)
   x = tf.keras.layers.Flatten()(x)
   x = tf.keras.Model(inputs=input1, outputs=x)
 
   #Input2
   y = tf.keras.layers.MaxPooling2D(2,2)(inputs[2])
   y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
-  y = tf.keras.layers.MaxPooling2D(4,4)(y)
-  y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
   y = tf.keras.layers.MaxPooling2D(2,2)(y)
   y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
+  # y = tf.keras.layers.MaxPooling2D(2,2)(y)
+  # y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
   y = tf.keras.layers.Flatten()(y)
   y = tf.keras.Model(inputs=input2, outputs=y)
 
@@ -92,8 +92,8 @@ def MakeModel(inputs) :
   z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
   z = tf.keras.layers.MaxPooling2D(4,4)(z)
   z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
-  z = tf.keras.layers.MaxPooling2D(2,2)(z)
-  z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
+  # z = tf.keras.layers.MaxPooling2D(2,2)(z)
+  # z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
   z = tf.keras.layers.Flatten()(z)
   z = tf.keras.Model(inputs=input3, outputs=z)
 
