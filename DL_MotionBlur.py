@@ -14,14 +14,14 @@ deprecation._PRINT_DEPRECATION_WARNINGS = False
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 os.environ['TF_ENABLE_AUTO_MIXED_PRECISION'] = '1'
 
-dataShape = 201 # Convolution K size
+dataShape = 51 # Convolution K size
 
 # Training
-trainModel = False
+trainModel = True
 modelFromFile = True
-trainFromCheckpoint = True
+trainFromCheckpoint = False
 batchSize = 128
-trainEpochs = 15
+trainEpochs = 5
 stride = 100
 learningRate = 0.001
 saveFiles = True
@@ -45,10 +45,10 @@ workDirectory = resourcesFolder  + 'Capture1_Sorted/'
 filePrefix = 'Capture1_'
 
 # Model output
-modelName = "3Depth_K201_selectedExamples"
+modelName = "3Depth_K51"
 
 weightsInFile = resourcesFolder + "Weights/" + modelName + "_Weights.h5"
-weightsFileName = resourcesFolder + "Weights/" + modelName + "_Weights.h5"
+weightsFileName = resourcesFolder + "Weights/" + modelName + "lr005_Weights.h5"
 graphDataFileName = resourcesFolder + "Graphs/" + modelName + "_GraphData.dat"
 
 #------------------------TF session-------------------------#
@@ -255,8 +255,8 @@ def RenderLoss(y_true, y_pred) :
 #-----------------------File handling-----------------------#
 
 np.random.seed(shuffleSeed)
-# setDescription = np.random.randint(startFrame, endFrame, setCount) # Contains a random sample of frames to use as a data set
-setDescription = np.array([291, 335, 412, 550, 623, 742, 749, 760, 766, 772, 787, 813, 830, 844, 856, 999, 800, 541])
+setDescription = np.random.randint(startFrame, endFrame, setCount) # Contains a random sample of frames to use as a data set
+# setDescription = np.array([291, 376, 335, 412, 550, 623, 742, 589, 749, 760, 766, 471, 772, 787, 710, 813, 830, 844, 997, 856, 999, 800, 541, 271])
 setCount = len(setDescription)
 frameShape = imageio.imread(workDirectory + 'SceneDepth/' + filePrefix + 'SceneDepth_' + GetFrameString(setDescription[0], digitFormat) + '.hdr').shape # Test image for shape
 
@@ -326,7 +326,7 @@ if (debugSample) :
 #---------------------TensorFlow model----------------------#
 
 K.set_floatx('float16')
-K.set_epsilon(1e-8)
+K.set_epsilon(1e-4)
 
 input0 = tf.keras.Input(shape=(dataShape, dataShape, 3), name='input_0', dtype='float16') #Scene color
 input1 = tf.keras.Input(shape=(dataShape, dataShape, 1), name='input_1', dtype='float16') #Depth 0
@@ -447,9 +447,9 @@ if testRender:
   fileNumberString = GetFrameString(fileNumber, 2)
 
   # Export frame data
-  imageio.imwrite(resourcesFolder + "Renders/" + modelName + "_Render_{}.png".format(fileNumberString), finalImage/255)
-  imageio.imwrite(resourcesFolder + "Renders/" + modelName + "_LossRender_{}.png".format(fileNumberString), renderLoss/maxLoss)
-  imageio.imwrite(resourcesFolder + "Renders/" + modelName + "_BaseVariation_{}.png".format(fileNumberString), renderLoss/maxLoss)
+  imageio.imwrite(resourcesFolder + "Renders/" + modelName + "_Render_{}.png".format(fileNumberString), (finalImage/255).astype('uint8'))
+  imageio.imwrite(resourcesFolder + "Renders/" + modelName + "_LossRender_{}.png".format(fileNumberString), (renderLoss/maxLoss).astype('uint8'))
+  imageio.imwrite(resourcesFolder + "Renders/" + modelName + "_BaseVariation_{}.png".format(fileNumberString), (baseVariation/maxLoss).astype('uint8'))
   print("Max loss : {}".format(maxLoss))
 
 #--------------------------------------------------------------#
