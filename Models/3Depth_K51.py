@@ -1,6 +1,7 @@
 import tensorflow as tf
+from functions import ApplyKernel
 
-def MakeModel(inputs, dataShape, modelName, ApplyKernel) :
+def MakeModel(inputs, dataShape, modelName) :
   #-Definition---------------------#
 
   #Input1
@@ -40,7 +41,7 @@ def MakeModel(inputs, dataShape, modelName, ApplyKernel) :
   n = tf.keras.layers.Dense(256, activation='relu')(combined)
   n = tf.keras.layers.Dense(dataShape**2, activation='linear')(n)
   n = tf.keras.layers.ReLU()(n)
-  n = tf.keras.layers.Lambda(lambda l: ApplyKernel(inputs[0], l))(n)
+  n = tf.keras.layers.Lambda(lambda l: ApplyKernel(inputs[0], l, dataShape))(n)
 
   #Model
   model = tf.keras.Model(inputs=[inputs[0], x.input, y.input, z.input], outputs=n, name=modelName)
