@@ -3,11 +3,10 @@ import numpy as np
 from matplotlib import pyplot as plt
 from colour import Color as c
 
-os.chdir("D:/Bachelor_resources/")
-baseImage = imageio.imread("Capture1/Capture1_FinalImage_0839.png")
-lossImage = imageio.imread("Renders/3Depth_K201_LossRender_0.png")
-baseColor = imageio.imread("Capture1/Capture1_SceneColor_0839.png")
-# variationImage = imageio.imread("Renders/3Depth_K193_BaseVariation_01.png")
+os.chdir("C:/Bachelor_resources/")
+baseImage = imageio.imread("Capture1_Sorted/FinalImage/Capture1_FinalImage_0839.png")[:,:,:3]
+renderImage = imageio.imread("Renders/3Depth_K201_Render_00.png")[:,:,:3]
+baseColor = imageio.imread("Capture1_Sorted/SceneColor/Capture1_SceneColor_0839.png")[:,:,:3]
 
 def MapColor(value, gradient) :
     return gradient[value]
@@ -17,8 +16,8 @@ def GradientMap(image, gradient) :
     return MapColor(image, gradient)
 
 def RenderLoss(y_true, y_pred) :
-  delta = np.mean(np.absolute(y_true - y_pred), axis=2)
-  return delta
+    delta = np.mean(np.absolute(y_true - y_pred), axis=2)
+    return delta
 
 red = c("red")
 green = c("green")
@@ -34,14 +33,21 @@ for color in range(len(colors)) :
 
 variationImage = RenderLoss(baseImage, baseColor)
 maxVariation = np.amax(variationImage)
-print("Max variation: {}".format(maxVariation))
-variationImage /= (210/maxVariation)
 
-lossMap = GradientMap(lossImage, gradient)
+renderLoss = RenderLoss(baseImage, renderImage)
+maxLoss = np.amax(renderLoss)
+
+print("Max variation: {}".format(maxVariation))
+print("Max loss: {}".format(maxLoss))
+
+variationImage /= (maxLoss/maxVariation)
+renderLoss /= (maxLoss/maxVariation)
+
+lossMap = GradientMap(renderLoss, gradient)
 variationMap = GradientMap(variationImage, gradient)
 
-imageio.imwrite("Illustrations/LossMap_0.png", (lossMap * 255).astype('uint8'))
-imageio.imwrite("Illustrations/VariationMap_0.png", (variationMap * 255).astype('uint8'))
+# imageio.imwrite("Illustrations/LossMap_0.png", (lossMap * 255).astype('uint8'))
+# imageio.imwrite("Illustrations/VariationMap_0.png", (variationMap * 255).astype('uint8'))
 
 fig = plt.figure()
 

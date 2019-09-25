@@ -7,38 +7,26 @@ def MakeModel(inputs, dataShape, modelName) :
   #Input1
   x = tf.keras.layers.MaxPooling2D(2,2)(inputs[1])
   x = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(x)
-  x = tf.keras.layers.MaxPooling2D(4,4)(x)
-  x = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(x)
-  x = tf.keras.layers.MaxPooling2D(2,2)(x)
-  x = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(x)
-  x = tf.keras.layers.Flatten()(x)
-  x = tf.keras.layers.Dense(64, activation='relu')(x)
   x = tf.keras.Model(inputs=inputs[1], outputs=x)
 
   #Input2
   y = tf.keras.layers.MaxPooling2D(2,2)(inputs[2])
   y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
-  y = tf.keras.layers.MaxPooling2D(4,4)(y)
-  y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
-  y = tf.keras.layers.MaxPooling2D(2,2)(y)
-  y = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(y)
-  y = tf.keras.layers.Flatten()(y)
-  y = tf.keras.layers.Dense(64, activation='relu')(y)
   y = tf.keras.Model(inputs=inputs[2], outputs=y)
 
   #Input3
   z = tf.keras.layers.MaxPooling2D(2,2)(inputs[3])
   z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
-  z = tf.keras.layers.MaxPooling2D(4,4)(z)
-  z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
-  z = tf.keras.layers.MaxPooling2D(2,2)(z)
-  z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
-  z = tf.keras.layers.Flatten()(z)
-  z = tf.keras.layers.Dense(64, activation='relu')(z)
   z = tf.keras.Model(inputs=inputs[3], outputs=z)
 
   #Combine inputs
   combined = tf.keras.layers.concatenate([x.output, y.output, z.output])
+  combined = tf.keras.layers.MaxPooling2D(4,4)(combined)
+  combined = tf.keras.layers.Conv2D(64, (3,3), activation='relu')(combined)
+  combined = tf.keras.layers.MaxPooling2D(2,2)(combined)
+  combined = tf.keras.layers.Conv2D(32, (3,3), activation='relu')(combined)
+  combined = tf.keras.layers.Flatten()(combined)
+  combined = tf.keras.layers.Dense(128, activation='relu')(combined)
 
   #Common network
   n = tf.keras.layers.Dense(256, activation='relu')(combined)

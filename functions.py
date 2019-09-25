@@ -35,7 +35,7 @@ def RenderLoss(y_true, y_pred) :
   delta = np.mean(np.absolute(y_true - y_pred), axis=2)
   return delta
 
-def RenderImage(model, resourcesFolder, dataShape) :
+def RenderImage(model, resourcesFolder, dataShape, rowSteps) :
 
   modelName = model.name
   fig = plt.figure(figsize=(8,8))
@@ -50,27 +50,27 @@ def RenderImage(model, resourcesFolder, dataShape) :
   render_2SceneDepth = np.zeros((frameShape[0] + 2 * padSize, frameShape[1] + 2 * padSize, 1))
 
   render_0SceneColor[padSize:padSize + frameShape[0], padSize:padSize + frameShape[1]] = \
-    (imageio.imread('D:/Bachelor_resources/Capture1/Capture1_SceneColor_0839.png')[:,:,:3]/255.0).astype('uint8')
+    (imageio.imread('D:/Bachelor_resources/Capture1/Capture1_SceneColor_0839.png')[:,:,:3]/255.0).astype('float16')
   render_0SceneDepth[padSize:padSize + frameShape[0], padSize:padSize + frameShape[1]] = \
-    (imageio.imread('D:/Bachelor_resources/Capture1/Capture1_SceneDepth_0839.hdr')[:,:,:1]/3000.0).astype('float32')
+    (imageio.imread('D:/Bachelor_resources/Capture1/Capture1_SceneDepth_0839.hdr')[:,:,:1]/3000.0).astype('float16')
   render_1SceneDepth[padSize:padSize + frameShape[0], padSize:padSize + frameShape[1]] = \
-    (imageio.imread('D:/Bachelor_resources/Capture1/Capture1_SceneDepth_0838.hdr')[:,:,:1]/3000.0).astype('float32')
+    (imageio.imread('D:/Bachelor_resources/Capture1/Capture1_SceneDepth_0838.hdr')[:,:,:1]/3000.0).astype('float16')
   render_2SceneDepth[padSize:padSize + frameShape[0], padSize:padSize + frameShape[1]] = \
-    (imageio.imread('D:/Bachelor_resources/Capture1/Capture1_SceneDepth_0837.hdr')[:,:,:1]/3000.0).astype('float32')
-  
-  rowSteps = 20
+    (imageio.imread('D:/Bachelor_resources/Capture1/Capture1_SceneDepth_0837.hdr')[:,:,:1]/3000.0).astype('float16')
+
   renderGenerator = RenderSequence(render_0SceneColor,
                                     render_0SceneDepth, 
                                     render_1SceneDepth, 
                                     render_2SceneDepth, 
-                                    frameShape, 
-                                    dataShape, 
+                                    frameShape,
+                                    dataShape,
                                     rowSteps)
   
   start = perf_counter_ns()
   renderedImage = model.predict_generator(renderGenerator,
                                           workers=8,
-                                          steps=frameShape[0] * rowSteps)
+                                          use_multiprocessing=False,
+                                          max_queue_size=20)
   end = perf_counter_ns()
   print("Time per sample: {:.2f}ms ".format((end-start)/(renderedImage.shape[0] * renderedImage.shape[1] *1000000.0)))
 
@@ -91,7 +91,8 @@ def RenderImage(model, resourcesFolder, dataShape) :
     imageio.imread('D:/Bachelor_resources/Capture1/Capture1_SceneColor_0839.png')[:,:,:3])
   maxLoss = np.amax(renderLoss)
 
-  plt.imshow(renderLoss/maxLoss)
+  plt.imshow((255 * renderLoss/maxLoss).astype('uint8'))
+  plt.show()
   
   fileNumber = 0
   while (modelName + "_Render_{}.png".format(GetFrameString(fileNumber, 2))) in os.listdir(resourcesFolder + "Renders/"):
@@ -100,10 +101,13 @@ def RenderImage(model, resourcesFolder, dataShape) :
   fileNumberString = GetFrameString(fileNumber, 2)
 
   # Export frame data
-  imageio.imwrite(resourcesFolder + "Renders/" + modelName + "_Render_{}.png".format(fileNumberString), (finalImage/255).astype('uint8'))
-  imageio.imwrite(resourcesFolder + "Renders/" + modelName + "_LossRender_{}.png".format(fileNumberString), (renderLoss/maxLoss).astype('uint8'))
-  imageio.imwrite(resourcesFolder + "Renders/" + modelName + "_BaseVariation_{}.png".format(fileNumberString), (baseVariation/maxLoss).astype('uint8'))
+  imageio.imwrite(resourcesFolder + "Renders/" + modelName + "_Render_{}.png".format(fileNumberString), finalImage.astype('uint8'))
+  imageio.imwrite(resourcesFolder + "Renders/" + modelName + "_LossRender_{}.png".format(fileNumberString), (255 * renderLoss/maxLoss).astype('uint8'))
+  imageio.imwrite(resourcesFolder + "Renders/" + modelName + "_BaseVariation_{}.png".format(fileNumberString), (255 * baseVariation/maxLoss).astype('uint8'))
   print("Max loss : {}".format(maxLoss))
+  
+  with open(resourcesFolder + "Renders/renderLoss.txt", 'a+') as lossFile :
+    lossFile.write("\n\n{}: {}".format(modelName, maxLoss))
 
 
 def DebugSample(batchSize, stride, frameShape, setDescription, randomFrame, dataShape, filePrefix, digitFormat, workDirectory, shuffleSeed, sample=839) :

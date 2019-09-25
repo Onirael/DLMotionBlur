@@ -24,18 +24,8 @@ def MakeModel(inputs, dataShape, modelName) :
   y = tf.keras.layers.Flatten()(y)
   y = tf.keras.Model(inputs=inputs[2], outputs=y)
 
-  #Input3
-  z = tf.keras.layers.MaxPooling2D(2,2)(inputs[3])
-  z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
-  z = tf.keras.layers.MaxPooling2D(2,2)(z)
-  z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
-  z = tf.keras.layers.MaxPooling2D(2,2)(z)
-  z = tf.keras.layers.Conv2D(16, (3,3), activation='relu')(z)
-  z = tf.keras.layers.Flatten()(z)
-  z = tf.keras.Model(inputs=inputs[3], outputs=z)
-
   #Combine inputs
-  combined = tf.keras.layers.concatenate([x.output, y.output, z.output])
+  combined = tf.keras.layers.concatenate([x.output, y.output])
 
   #Common network
   n = tf.keras.layers.Dense(256, activation='relu')(combined)
@@ -44,6 +34,6 @@ def MakeModel(inputs, dataShape, modelName) :
   n = tf.keras.layers.Lambda(lambda l: ApplyKernel(inputs[0], l, dataShape))(n)
 
   #Model
-  model = tf.keras.Model(inputs=[inputs[0], x.input, y.input, z.input], outputs=n, name=modelName)
+  model = tf.keras.Model(inputs=[inputs[0], x.input, y.input], outputs=n, name=modelName)
 
   return model
