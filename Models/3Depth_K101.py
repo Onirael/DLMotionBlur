@@ -2,6 +2,7 @@ import tensorflow as tf
 from functions import ApplyKernel
 
 def MakeModel(inputs, dataShape, modelName) :
+
   #-Definition---------------------#
 
   #Input1

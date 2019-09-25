@@ -1,4 +1,4 @@
-import math, imageio, os, random
+import math, imageio, os, random, pickle
 import numpy as np
 import tensorflow as tf
 from time import perf_counter_ns
@@ -153,3 +153,72 @@ def DebugSample(batchSize, stride, frameShape, setDescription, randomFrame, data
 
   print("Max depth : ", np.amax(example[0]['input_1'][testElement]))
   plt.show()
+
+
+def ShowTrainingGraph(graphDataFileName) :
+
+  if os.path.exists(graphDataFileName) :
+    with open(graphDataFileName, 'rb') as graphDataFile :
+      training_loss, test_loss, epoch_count, trainSetSize = pickle.load(graphDataFile)
+
+    epochs = range(1, epoch_count)
+    plt.title("Training examples : {}".format(trainSetSize))
+    plt.plot(epochs, training_loss, 'r--')
+    plt.plot(epochs, test_loss, 'b-')
+    plt.legend(['Training Loss', 'Test Loss'])
+    plt.xlabel('Epoch')
+    plt.xlim(1, len(training_loss))
+    plt.ylabel('Loss')
+    plt.ylim(0, 20)
+    plt.xticks(np.arange(1, len(training_loss) + 1))
+    plt.show()
+
+  else :
+    print("\nInvalid graph data file name")
+
+def UpdateGraphData(trainLoss, testLoss, trainSetSize, graphDataFile) :
+  training_loss = []
+  test_loss = []
+  epoch_count = 1
+  trainSetSize = [trainSetSize]
+
+  if os.path.exists(graphDataFile) :
+    with open(graphDataFile, 'rb') as graphDataFile :
+      _training_loss, _test_loss, _epoch_count, _trainSetSize = pickle.load(graphDataFile)
+
+    training_loss = _training_loss + training_loss
+    test_loss = _test_loss + test_loss
+    epoch_count = _epoch_count + 1
+    trainSetSize = _trainSetSize + trainSetSize
+
+  else :
+    training_loss = [trainLoss]
+    test_loss = [testLoss]
+
+  with open(graphDataFile, 'wb') as graphDataFile :
+    pickle.dump((training_loss, test_loss, epoch_count, trainSetSize), graphDataFile)
+
+
+def Training(model, trainEpochs, callbacks, trainGenerator, crossValidGenerator, 
+            trainFromCheckpoint, weightsInFile, weightsFile, graphDataFile, show_Graph) :
+
+  if trainFromCheckpoint :
+    model.load_weights(weightsInFile)
+
+  training = model.fit_generator(
+    trainGenerator,
+    validation_data=crossValidGenerator,
+    epochs=trainEpochs,
+    callbacks=callbacks,
+    workers=8,
+    max_queue_size=20,
+    use_multiprocessing=False,
+  )
+
+  model.save_weights(weightsFile)
+  print("Saved weights to file")
+
+  if show_Graph :
+    ShowTrainingGraph(graphDataFile)
+    
+  return training
