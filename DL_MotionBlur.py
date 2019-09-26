@@ -1,18 +1,15 @@
 if __name__=='__main__':
   print("Importing modules...")
-  from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QVBoxLayout
   from matplotlib import pyplot as plt
   import numpy as np
   import tensorflow as tf
-  import tensorflow.keras.backend as K
-  from tensorflow.keras.mixed_precision.experimental import LossScaleOptimizer
-  from tensorflow.keras.optimizers import RMSprop
   from tensorflow.keras.models import load_model
-  from tensorflow.keras.callbacks import ModelCheckpoint
-  import os, math, random, imageio, pickle, importlib
+  import os, math, random, imageio, pickle, importlib, sys
   import tensorflow.python.util.deprecation as deprecation
   deprecation._PRINT_DEPRECATION_WARNINGS = False
   from sampleSequence import SampleSequence, GetFrameString
+  from PyQt5 import QtWidgets as qtw
+  from UI.gui import AppGUI
   from functions import GetSampleMaps,\
                         GetFrameString,\
                         Loss,\
@@ -20,10 +17,35 @@ if __name__=='__main__':
                         DebugSample,\
                         ShowTrainingGraph,\
                         Training,\
-                        UpdateGraphData
+                        UpdateGraphData,\
+                        MakeGenerators,\
+                        
 
   os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
   os.environ['TF_ENABLE_AUTO_MIXED_PRECISION'] = '1'
+  os.chdir(os.path.dirname(__file__))
+
+  #----------------------Default values-----------------------#
+  defaultSettings = {
+    'KSize': 201,
+    'ModelName': '3Depth_K201',
+    'BatchSize': 128,
+    'TrainFromCheckpoint': False,
+    'TrainEpochs': 5,
+    'LearningRate': 0.001,
+    'Stride': 10,
+    'ShuffleSeed': 36,
+    'RandomFrames': 20,
+    'ResourcesFolder': 'C:/Bachelor_resources/',
+    'FramesFolder': 'Capture1_Sorted',
+    'FilePrefix': 'Capture1_',
+    'FirstFrame': 228,
+    'LastFrame': 963,
+    'RandomFrames': 20,
+    'DigitFormat': 4,
+    'IncludeFrames': [290, 332, 406, 540, 608, 721, 
+                      728, 736, 742, 748, 763, 788, 
+                      803, 817, 827, 963, 776, 532]}
 
   # Training
   dataShape = 201
@@ -65,6 +87,13 @@ if __name__=='__main__':
   config.gpu_options.allow_growth = True
   session = tf.compat.v1.Session(config=config)
 
+  #-----------------------PyQt Setup--------------------------#
+
+  app = qtw.QApplication(sys.argv)
+  window = AppGUI()
+  # window.show()
+  app.exec_()
+
   #-----------------------File handling-----------------------#
 
   np.random.seed(shuffleSeed)
@@ -80,81 +109,6 @@ if __name__=='__main__':
   trainSetFraction = 1
   crossValidSetFraction = 0.2
   testSetFraction = 0.2
-
-  #-----------------------PyQt Setup--------------------------#
-
-  app = QApplication([])
-  window = QWidget()
-  layout = QVBoxLayout()
-  layout.addWidget(QPushButton('Top'))
-  layout.addWidget(QPushButton('Bottom'))
-  window.setLayout(layout)
-  window.show()
-  app.exec_()
-
-  #---------------------TensorFlow model----------------------#
-
-  K.set_floatx('float16')
-  K.set_epsilon(1e-4)
-
-  input0 = tf.keras.Input(shape=(dataShape, dataShape, 3), name='input_0', dtype='float16') #Scene color
-  input1 = tf.keras.Input(shape=(dataShape, dataShape, 1), name='input_1', dtype='float16') #Depth 0
-  input2 = tf.keras.Input(shape=(dataShape, dataShape, 1), name='input_2', dtype='float16') #Depth -1
-  input3 = tf.keras.Input(shape=(dataShape, dataShape, 1), name='input_3', dtype='float16') #Depth -2
-
-  modelFunc = importlib.import_module('Models.' + modelName)
-
-  model = modelFunc.MakeModel([input0, input1, input2, input3], dataShape, modelName)
-  print("Loaded model from disk")
-
-  model.compile(loss=Loss,
-    optimizer=LossScaleOptimizer(RMSprop(lr=learningRate, epsilon=1e-4), 1000))
-
-  model.summary()
-
-  #--------------------Data Generators------------------------#
-
-  trainGenerator = SampleSequence(batchSize, 
-                                  setDescription, 
-                                  frameShape,
-                                  GetSampleMaps(frameShape, setDescription, shuffleSeed),
-                                  dataShape, filePrefix, digitFormat, workDirectory,
-                                  stride=int(stride//trainSetFraction))
-
-  crossValidGenerator = SampleSequence(batchSize, 
-                                      setDescription, 
-                                      frameShape,
-                                      GetSampleMaps(frameShape, setDescription, shuffleSeed + 10), 
-                                      dataShape, filePrefix, digitFormat, workDirectory,
-                                      stride=int(stride//crossValidSetFraction))
-
-  testGenerator = SampleSequence(batchSize, 
-                                setDescription, 
-                                frameShape,
-                                GetSampleMaps(frameShape, setDescription, shuffleSeed + 20),
-                                dataShape, filePrefix, digitFormat, workDirectory,
-                                stride=int(stride//testSetFraction))
-
-
-  print("\nTraining set size : {:.2f} Million".format(trainGenerator.__len__() * batchSize/1000000))
-  print("Cross validation set size : {:.2f} Million".format(crossValidGenerator.__len__() * batchSize/1000000))
-  print("Test set size : {:.2f} Million".format(testGenerator.__len__() * batchSize/1000000))
-  print()
-
-  #-----------------------Keras Callbacks---------------------#
-
-  class SaveGraphCallback(tf.keras.callbacks.Callback) :
-    def __init__(self, graphDataFile, trainGenerator) :
-      self.graphDataFile = graphDataFile
-      self.trainSetSize = trainGenerator.__len__()
-
-    def on_epoch_end(self, epoch, logs=None) :
-      UpdateGraphData(logs['loss'], logs['val_loss'], self.trainSetSize, self.graphDataFile)
-
-  graphDataUpdate = SaveGraphCallback(graphDataFileName, trainGenerator)
-  trainCheckpoint = ModelCheckpoint(weightsFileName, verbose=0, save_weights_only=True)
-  backupCheckpoint = ModelCheckpoint(resourcesFolder + "Weights/" + modelName + "_{epoch:02d}" + "_Weights.h5", verbose=0, save_weights_only=True)
-
   #-----------------------------------------------------------#
 
   if debugSample:
@@ -170,7 +124,7 @@ if __name__=='__main__':
                 shuffleSeed)
     quit()
     
-  if trainModel :
+  if trainModel:
     Training(model, 
             trainEpochs,
             [trainCheckpoint, backupCheckpoint, SaveGraphCallback],
@@ -182,6 +136,6 @@ if __name__=='__main__':
             graphDataFileName,
             lossGraph)
 
-  elif testRender :
+  elif testRender:
     rowSteps = 20
     RenderImage(model, resourcesFolder, dataShape, rowSteps)

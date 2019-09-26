@@ -1,9 +1,12 @@
-import math, imageio, os, random, pickle
+import math, imageio, os, random, pickle, importlib
 import numpy as np
 import tensorflow as tf
 from time import perf_counter_ns
 from matplotlib import pyplot as plt
 from sampleSequence import SampleSequence, RenderSequence, GetFrameString
+from tensorflow.keras.mixed_precision.experimental import LossScaleOptimizer
+from tensorflow.keras.optimizers import RMSprop
+import tensorflow.keras.backend as K
 
 #-------------------------Functions-------------------------#
 
@@ -200,10 +203,10 @@ def UpdateGraphData(trainLoss, testLoss, trainSetSize, graphDataFile) :
 
 
 def Training(model, trainEpochs, callbacks, trainGenerator, crossValidGenerator, 
-            trainFromCheckpoint, weightsInFile, weightsFile, graphDataFile, show_Graph) :
+            trainFromCheckpoint, weightsFile, graphDataFile) :
 
   if trainFromCheckpoint :
-    model.load_weights(weightsInFile)
+    model.load_weights(weightsFile)
 
   training = model.fit_generator(
     trainGenerator,
@@ -217,8 +220,81 @@ def Training(model, trainEpochs, callbacks, trainGenerator, crossValidGenerator,
 
   model.save_weights(weightsFile)
   print("Saved weights to file")
-
-  if show_Graph :
-    ShowTrainingGraph(graphDataFile)
     
   return training
+
+def MakeGenerators(startFrame, endFrame, randomFrames, stride, dataShape, workDirectory, batchSize, filePrefix, seed, digitFormat, verbose=True):
+  #-----------------------File handling-----------------------#
+
+  np.random.seed(seed)
+  setDescription = np.random.randint(startFrame, endFrame + 1, randomFrames) # Contains a random sample of frames to use as a data set
+  setDescription = np.append(setDescription, [290, 332, 406, 540, 608, 721, 728, 736, 742, 748, 763, 788, 803, 817, 827, 963, 776, 532])
+  np.random.shuffle(setDescription)
+  setCount = len(setDescription)
+  frameShape = imageio.imread(workDirectory + 'SceneDepth/' + filePrefix + 'SceneDepth_' + GetFrameString(setDescription[0], digitFormat) + '.hdr').shape # Test image for shape
+
+  examplesCount = setCount * frameShape[0] * frameShape[1] /stride
+
+  if verbose:
+    examplesDisplayCount = examplesCount/1000000
+    print("\nTotal training examples : {:.2f} Million".format(examplesDisplayCount))
+
+  trainSetFraction = 1
+  crossValidSetFraction = 0.2
+  testSetFraction = 0.2
+  
+  #--------------------Data Generators------------------------#
+
+  trainGenerator = SampleSequence(batchSize, 
+                                  setDescription, 
+                                  frameShape,
+                                  GetSampleMaps(frameShape, setDescription, seed),
+                                  dataShape, filePrefix, digitFormat, workDirectory,
+                                  stride=int(stride//trainSetFraction))
+
+  crossValidGenerator = SampleSequence(batchSize, 
+                                      setDescription, 
+                                      frameShape,
+                                      GetSampleMaps(frameShape, setDescription, seed + 10), 
+                                      dataShape, filePrefix, digitFormat, workDirectory,
+                                      stride=int(stride//crossValidSetFraction))
+
+  testGenerator = SampleSequence(batchSize, 
+                                setDescription, 
+                                frameShape,
+                                GetSampleMaps(frameShape, setDescription, seed + 20),
+                                dataShape, filePrefix, digitFormat, workDirectory,
+                                stride=int(stride//testSetFraction))
+
+  if verbose:
+    print("\nTraining set size : {:.2f} Million".format(trainGenerator.__len__() * batchSize/1000000))
+    print("Cross validation set size : {:.2f} Million".format(crossValidGenerator.__len__() * batchSize/1000000))
+    print("Test set size : {:.2f} Million".format(testGenerator.__len__() * batchSize/1000000))
+    print()
+
+  return {'TrainGenerator': trainGenerator, 
+          'CrossValidGenerator': crossValidGenerator, 
+          'TestGenerator': testGenerator}
+
+
+def BuildModel(dataShape, modelName, learningRate):
+
+  K.set_floatx('float16')
+  K.set_epsilon(1e-4)
+
+  input0 = tf.keras.Input(shape=(dataShape, dataShape, 3), name='input_0', dtype='float16') #Scene color
+  input1 = tf.keras.Input(shape=(dataShape, dataShape, 1), name='input_1', dtype='float16') #Depth 0
+  input2 = tf.keras.Input(shape=(dataShape, dataShape, 1), name='input_2', dtype='float16') #Depth -1
+  input3 = tf.keras.Input(shape=(dataShape, dataShape, 1), name='input_3', dtype='float16') #Depth -2
+
+  modelFunc = importlib.import_module('Models.' + modelName)
+
+  model = modelFunc.MakeModel([input0, input1, input2, input3], dataShape, modelName)
+  print("Loaded model from disk")
+
+  model.compile(loss=Loss,
+    optimizer=LossScaleOptimizer(RMSprop(lr=learningRate, epsilon=1e-4), 1000))
+
+  model.summary()
+
+  return model
