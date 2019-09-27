@@ -223,12 +223,11 @@ def Training(model, trainEpochs, callbacks, trainGenerator, crossValidGenerator,
     
   return training
 
-def MakeGenerators(startFrame, endFrame, randomFrames, stride, dataShape, workDirectory, batchSize, filePrefix, seed, digitFormat, verbose=True):
-  #-----------------------File handling-----------------------#
-
+def MakeGenerators(startFrame, endFrame, randomFrames, includeFrames, stride, dataShape, workDirectory, batchSize, filePrefix, seed, digitFormat, verbose=True):
+  
   np.random.seed(seed)
   setDescription = np.random.randint(startFrame, endFrame + 1, randomFrames) # Contains a random sample of frames to use as a data set
-  setDescription = np.append(setDescription, [290, 332, 406, 540, 608, 721, 728, 736, 742, 748, 763, 788, 803, 817, 827, 963, 776, 532])
+  setDescription = np.append(setDescription, includeFrames)
   np.random.shuffle(setDescription)
   setCount = len(setDescription)
   frameShape = imageio.imread(workDirectory + 'SceneDepth/' + filePrefix + 'SceneDepth_' + GetFrameString(setDescription[0], digitFormat) + '.hdr').shape # Test image for shape

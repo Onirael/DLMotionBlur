@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Dialog</string>
+   <string>SettingsWindow</string>
   </property>
   <widget class="QDialogButtonBox" name="buttonBox">
    <property name="geometry">
@@ -117,7 +117,7 @@
       <string>Shuffle seed</string>
      </property>
     </widget>
-    <widget class="QSpinBox" name="spinBox_4">
+    <widget class="QSpinBox" name="learningRateSpinBox">
      <property name="geometry">
       <rect>
        <x>220</x>
@@ -126,8 +126,11 @@
        <height>22</height>
       </rect>
      </property>
+     <property name="maximum">
+      <number>9999</number>
+     </property>
     </widget>
-    <widget class="QSpinBox" name="spinBox_5">
+    <widget class="QSpinBox" name="batchSizeSpinBox">
      <property name="geometry">
       <rect>
        <x>220</x>
@@ -136,8 +139,14 @@
        <height>22</height>
       </rect>
      </property>
+     <property name="maximum">
+      <number>9999</number>
+     </property>
+     <property name="value">
+      <number>0</number>
+     </property>
     </widget>
-    <widget class="QSpinBox" name="spinBox_6">
+    <widget class="QSpinBox" name="strideSpinBox">
      <property name="geometry">
       <rect>
        <x>220</x>
@@ -146,8 +155,11 @@
        <height>22</height>
       </rect>
      </property>
+     <property name="maximum">
+      <number>9999</number>
+     </property>
     </widget>
-    <widget class="QSpinBox" name="spinBox_9">
+    <widget class="QSpinBox" name="seedSpinBox">
      <property name="geometry">
       <rect>
        <x>220</x>
@@ -155,6 +167,76 @@
        <width>42</width>
        <height>22</height>
       </rect>
+     </property>
+     <property name="maximum">
+      <number>9999</number>
+     </property>
+    </widget>
+    <widget class="QCheckBox" name="inWeightsCheckbox">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>130</y>
+       <width>191</width>
+       <height>17</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>10</pointsize>
+      </font>
+     </property>
+     <property name="text">
+      <string>Use output weights as input</string>
+     </property>
+     <property name="checked">
+      <bool>true</bool>
+     </property>
+     <property name="tristate">
+      <bool>false</bool>
+     </property>
+    </widget>
+    <widget class="QLabel" name="inWeightsLabel">
+     <property name="enabled">
+      <bool>false</bool>
+     </property>
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>160</y>
+       <width>121</width>
+       <height>16</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>10</pointsize>
+      </font>
+     </property>
+     <property name="text">
+      <string>Input weights Suffix</string>
+     </property>
+    </widget>
+    <widget class="QLineEdit" name="inWeightsInput">
+     <property name="enabled">
+      <bool>false</bool>
+     </property>
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>180</y>
+       <width>251</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string/>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+     </property>
+     <property name="placeholderText">
+      <string>ex: _0_Weights</string>
      </property>
     </widget>
    </widget>
@@ -166,7 +248,7 @@
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>210</y>
+       <y>190</y>
        <width>101</width>
        <height>21</height>
       </rect>
@@ -184,7 +266,7 @@
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>60</y>
+       <y>70</y>
        <width>141</width>
        <height>21</height>
       </rect>
@@ -198,21 +280,24 @@
       <string>Frames folder name</string>
      </property>
     </widget>
-    <widget class="QLineEdit" name="lineEdit_7">
+    <widget class="QLineEdit" name="framesFolderInput">
      <property name="geometry">
       <rect>
-       <x>10</x>
-       <y>90</y>
-       <width>251</width>
+       <x>170</x>
+       <y>70</y>
+       <width>91</width>
        <height>20</height>
       </rect>
+     </property>
+     <property name="placeholderText">
+      <string>ex: Frames</string>
      </property>
     </widget>
     <widget class="QLabel" name="label_7">
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>150</y>
+       <y>130</y>
        <width>141</width>
        <height>21</height>
       </rect>
@@ -233,7 +318,7 @@
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>180</y>
+       <y>160</y>
        <width>141</width>
        <height>21</height>
       </rect>
@@ -268,7 +353,7 @@
       <string>Resources path</string>
      </property>
     </widget>
-    <widget class="QLineEdit" name="lineEdit_9">
+    <widget class="QLineEdit" name="resourcesFolderInput">
      <property name="geometry">
       <rect>
        <x>10</x>
@@ -277,12 +362,15 @@
        <height>20</height>
       </rect>
      </property>
+     <property name="placeholderText">
+      <string>ex: C:/Users/Tom/DLMotionBlur/Resources</string>
+     </property>
     </widget>
     <widget class="QLabel" name="label_10">
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>120</y>
+       <y>100</y>
        <width>141</width>
        <height>21</height>
       </rect>
@@ -296,51 +384,63 @@
       <string>File prefix</string>
      </property>
     </widget>
-    <widget class="QLineEdit" name="lineEdit_10">
+    <widget class="QLineEdit" name="filePrefixInput">
      <property name="geometry">
       <rect>
        <x>170</x>
-       <y>120</y>
+       <y>100</y>
        <width>91</width>
        <height>20</height>
       </rect>
      </property>
+     <property name="placeholderText">
+      <string>ex: Frames_</string>
+     </property>
     </widget>
-    <widget class="QSpinBox" name="spinBox">
+    <widget class="QSpinBox" name="firstFrameSpinBox">
      <property name="geometry">
       <rect>
        <x>220</x>
-       <y>150</y>
+       <y>130</y>
        <width>42</width>
        <height>22</height>
       </rect>
      </property>
+     <property name="maximum">
+      <number>9999</number>
+     </property>
     </widget>
-    <widget class="QSpinBox" name="spinBox_2">
+    <widget class="QSpinBox" name="lastFrameSpinBox">
      <property name="geometry">
       <rect>
        <x>220</x>
-       <y>180</y>
+       <y>160</y>
        <width>42</width>
        <height>22</height>
       </rect>
      </property>
+     <property name="maximum">
+      <number>9999</number>
+     </property>
     </widget>
-    <widget class="QSpinBox" name="spinBox_3">
+    <widget class="QSpinBox" name="randomFramesSpinBox">
      <property name="geometry">
       <rect>
        <x>220</x>
-       <y>210</y>
+       <y>190</y>
        <width>42</width>
        <height>22</height>
       </rect>
+     </property>
+     <property name="maximum">
+      <number>9999</number>
      </property>
     </widget>
     <widget class="QLabel" name="label_11">
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>240</y>
+       <y>220</y>
        <width>101</width>
        <height>21</height>
       </rect>
@@ -350,25 +450,31 @@
        <pointsize>10</pointsize>
       </font>
      </property>
+     <property name="whatsThis">
+      <string comment="The amount of digits in the file number, i.e. Frames_FinalImage_003.png has a digit format of 3"/>
+     </property>
      <property name="text">
       <string>Digit format</string>
      </property>
     </widget>
-    <widget class="QSpinBox" name="spinBox_7">
+    <widget class="QSpinBox" name="digitFormatSpinBox">
      <property name="geometry">
       <rect>
        <x>220</x>
-       <y>240</y>
+       <y>220</y>
        <width>42</width>
        <height>22</height>
       </rect>
+     </property>
+     <property name="maximum">
+      <number>9999</number>
      </property>
     </widget>
     <widget class="QLabel" name="label_12">
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>270</y>
+       <y>250</y>
        <width>141</width>
        <height>21</height>
       </rect>
@@ -378,18 +484,24 @@
        <pointsize>10</pointsize>
       </font>
      </property>
+     <property name="whatsThis">
+      <string comment="Frame numbers that will be added to the random frames, may cause repetition"/>
+     </property>
      <property name="text">
       <string>Include frames</string>
      </property>
     </widget>
-    <widget class="QLineEdit" name="lineEdit_8">
+    <widget class="QLineEdit" name="includeFramesInput">
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>300</y>
+       <y>280</y>
        <width>251</width>
        <height>20</height>
       </rect>
+     </property>
+     <property name="placeholderText">
+      <string>ex: 2, 16, 109, ...</string>
      </property>
     </widget>
    </widget>
@@ -397,6 +509,37 @@
     <attribute name="title">
      <string>Rendering</string>
     </attribute>
+    <widget class="QSpinBox" name="rowStepsSpinBox">
+     <property name="geometry">
+      <rect>
+       <x>220</x>
+       <y>10</y>
+       <width>42</width>
+       <height>22</height>
+      </rect>
+     </property>
+     <property name="maximum">
+      <number>9999</number>
+     </property>
+    </widget>
+    <widget class="QLabel" name="label_13">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>10</y>
+       <width>71</width>
+       <height>21</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>10</pointsize>
+      </font>
+     </property>
+     <property name="text">
+      <string>Row steps</string>
+     </property>
+    </widget>
    </widget>
   </widget>
  </widget>
