@@ -23,7 +23,7 @@ class SettingsGUI(qtw.QDialog):
 
     self.batchSizeSpinBox = self.findChild(qtw.QSpinBox, 'batchSizeSpinBox')
     self.batchSizeSpinBox.setValue(settings['BatchSize'])
-    self.learningRateSpinBox = self.findChild(qtw.QSpinBox, 'learningRateSpinBox')
+    self.learningRateSpinBox = self.findChild(qtw.QDoubleSpinBox, 'learningRateSpinBox')
     self.learningRateSpinBox.setValue(settings['LearningRate'])
     self.strideSpinBox = self.findChild(qtw.QSpinBox, 'strideSpinBox')
     self.strideSpinBox.setValue(settings['Stride'])
@@ -78,7 +78,7 @@ class SettingsGUI(qtw.QDialog):
     
     framesInPath = self.framesFolderInput.text()
     if os.path.exists(self.userSettings['ResourcesFolder'] + framesInPath):
-      self.userSettings['FramesFolder'] = self.framesFolderInput
+      self.userSettings['FramesFolder'] = self.framesFolderInput.text()
     else:
       print("No folder {} in the specified resources folder, reverted to default value".format(framesInPath))
     
@@ -137,7 +137,7 @@ class AppGUI(qtw.QDialog):
     #------------------------------------------------------------#
 
     self.graphFile = self.userSettings['ResourcesFolder'] + 'Graphs/' + self.userSettings['ModelName'] + '_GraphData.dat'
-    self.weightsFile = self.userSettings['ResourcesFolder'] + 'Weights/' + self.userSettings['ModelName'] + '_Weights.dat'
+    self.weightsFile = self.userSettings['ResourcesFolder'] + 'Weights/' + self.userSettings['ModelName'] + '_Weights.h5'
       
     self.modelNameInput = self.findChild(qtw.QLineEdit, 'modelNameInput')
     self.modelNameInput.setText(self.userSettings['ModelName'])
@@ -157,13 +157,22 @@ class AppGUI(qtw.QDialog):
     self.renderButton.clicked.connect(self.RenderButtonPressed)
     self.settingsButton.clicked.connect(self.SettingsButtonPressed)
 
+  def closeEvent(self, event):
+    self.SaveSettings()
+    event.accept()
+
   def SaveSettings(self):
+    self.userSettings['ModelName'] = self.modelNameInput.text()
+    self.userSettings['KSize'] = self.KSizeSpinBox.value()
+    self.userSettings['TrainFromCheckpoint'] = self.checkpointCheckbox.isChecked()
+
     saveFile = 'UI/UserSettings.dat'
     with open(saveFile, 'wb+') as settingsFile:
       pickle.dump(self.userSettings, settingsFile)
     print("Saved settings to {}".format(saveFile))
 
   def TrainButtonPressed(self):
+    
     self.SaveSettings()
 
     model = BuildModel(self.userSettings['KSize'], 
@@ -180,9 +189,9 @@ class AppGUI(qtw.QDialog):
                                 self.userSettings['BatchSize'],
                                 self.userSettings['FilePrefix'],
                                 self.userSettings['ShuffleSeed'],
-                                self.userSettings['DigitFormat'],)
+                                self.userSettings['DigitFormat'])
 
-    callbacks = MakeCallbacks(self.graphDataFile,
+    callbacks = MakeCallbacks(self.graphFile,
                               self.weightsFile,
                               self.userSettings['ResourcesFolder'],
                               self.userSettings['ModelName'],

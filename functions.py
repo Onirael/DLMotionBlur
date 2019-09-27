@@ -230,7 +230,7 @@ def MakeGenerators(startFrame, endFrame, randomFrames, includeFrames, stride, da
   setDescription = np.append(setDescription, includeFrames)
   np.random.shuffle(setDescription)
   setCount = len(setDescription)
-  frameShape = imageio.imread(workDirectory + 'SceneDepth/' + filePrefix + 'SceneDepth_' + GetFrameString(setDescription[0], digitFormat) + '.hdr').shape # Test image for shape
+  frameShape = imageio.imread(workDirectory + '/' + 'SceneDepth/' + filePrefix + 'SceneDepth_' + GetFrameString(setDescription[0], digitFormat) + '.hdr').shape # Test image for shape
 
   examplesCount = setCount * frameShape[0] * frameShape[1] /stride
 
