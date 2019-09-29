@@ -57,11 +57,11 @@ class SampleSequence(tf.keras.utils.Sequence) :
     frameBatch = idx - frameID * self.batchPerFrame                                 # Gets the batch number for the current frame
 
     # Import frames
-    sceneColor = PadImage(imageio.imread(self.workDirectory + 'SceneColor/' + self.filePrefix + 'SceneColor_' + GetFrameString(frame, self.digitFormat) + '.png')[:,:,:3]/255.0, self.sampleSize).astype('float16')
-    sceneDepth0 = PadImage(imageio.imread(self.workDirectory + 'SceneDepth/' + self.filePrefix + 'SceneDepth_' + GetFrameString(frame, self.digitFormat) + '.hdr')[:,:,:1]/3000.0, self.sampleSize).astype('float16')
-    sceneDepth1 = PadImage(imageio.imread(self.workDirectory + 'SceneDepth/' + self.filePrefix + 'SceneDepth_' + GetFrameString(frame - 1, self.digitFormat) + '.hdr')[:,:,:1]/3000.0, self.sampleSize).astype('float16')
-    sceneDepth2 = PadImage(imageio.imread(self.workDirectory + 'SceneDepth/' + self.filePrefix + 'SceneDepth_' + GetFrameString(frame - 2, self.digitFormat) + '.hdr')[:,:,:1]/3000.0, self.sampleSize).astype('float16')
-    finalImage = imageio.imread(self.workDirectory + 'FinalImage/' + self.filePrefix + 'FinalImage_' + GetFrameString(frame, self.digitFormat) + '.png')[:,:,:3].astype('float16')
+    sceneColor = PadImage(imageio.imread(self.workDirectory + '/' + 'SceneColor/' + self.filePrefix + 'SceneColor_' + GetFrameString(frame, self.digitFormat) + '.png')[:,:,:3]/255.0, self.sampleSize).astype('float16')
+    sceneDepth0 = PadImage(imageio.imread(self.workDirectory + '/' + 'SceneDepth/' + self.filePrefix + 'SceneDepth_' + GetFrameString(frame, self.digitFormat) + '.hdr')[:,:,:1]/3000.0, self.sampleSize).astype('float16')
+    sceneDepth1 = PadImage(imageio.imread(self.workDirectory + '/' + 'SceneDepth/' + self.filePrefix + 'SceneDepth_' + GetFrameString(frame - 1, self.digitFormat) + '.hdr')[:,:,:1]/3000.0, self.sampleSize).astype('float16')
+    sceneDepth2 = PadImage(imageio.imread(self.workDirectory + '/' + 'SceneDepth/' + self.filePrefix + 'SceneDepth_' + GetFrameString(frame - 2, self.digitFormat) + '.hdr')[:,:,:1]/3000.0, self.sampleSize).astype('float16')
+    finalImage = imageio.imread(self.workDirectory + '/' + 'FinalImage/' + self.filePrefix + 'FinalImage_' + GetFrameString(frame, self.digitFormat) + '.png')[:,:,:3].astype('float16')
 
     # Batch arrays
     batch_SceneColor = np.zeros((self.batch_size, self.dataShape, self.dataShape, 3))

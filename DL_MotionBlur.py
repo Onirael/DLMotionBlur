@@ -1,9 +1,6 @@
 if __name__=='__main__':
   print("Importing modules...")
-  from matplotlib import pyplot as plt
   import numpy as np
-  import tensorflow as tf
-  from tensorflow.keras.models import load_model
   import os, math, random, imageio, pickle, importlib, sys
   import tensorflow.python.util.deprecation as deprecation
   deprecation._PRINT_DEPRECATION_WARNINGS = False
@@ -29,7 +26,7 @@ if __name__=='__main__':
     'LearningRate': 0.001,
     'Stride': 10,
     'ShuffleSeed': 36,
-    'inWeights': False,
+    'inWeights': True,
     'inWeightsSuffix': '_Weights',
     'ResourcesFolder': 'C:/Bachelor_resources/',
     'FramesFolder': 'Capture1_Sorted',
@@ -44,12 +41,6 @@ if __name__=='__main__':
     'RowSteps': 20}
 
   DebugSample = False
-
-  #------------------------TF session-------------------------#
-
-  config = tf.compat.v1.ConfigProto()
-  config.gpu_options.allow_growth = True
-  session = tf.compat.v1.Session(config=config)
 
   #-----------------------PyQt Setup--------------------------#
 

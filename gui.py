@@ -1,5 +1,7 @@
 from PyQt5 import QtWidgets as qtw
+from PyQt5 import QtCore
 from PyQt5 import uic
+from PyQt5 import QtGui
 from functions import Training,\
                       BuildModel,\
                       MakeGenerators,\
@@ -7,7 +9,7 @@ from functions import Training,\
                       RenderImage,\
                       ShowTrainingGraph
 from callbacks import MakeCallbacks
-import os, pickle
+import os, pickle, sys
 import numpy as np
 
 class SettingsGUI(qtw.QDialog):
@@ -74,13 +76,13 @@ class SettingsGUI(qtw.QDialog):
     if os.path.exists(resourcesInPath):
       self.userSettings['ResourcesFolder'] = resourcesInPath
     else:
-      print("Folder {} is invalid, reverted to default value".format(resourcesInPath))
+      print("Folder {} is invalid, reverted to previous value".format(resourcesInPath))
     
     framesInPath = self.framesFolderInput.text()
     if os.path.exists(self.userSettings['ResourcesFolder'] + framesInPath):
       self.userSettings['FramesFolder'] = self.framesFolderInput.text()
     else:
-      print("No folder {} in the specified resources folder, reverted to default value".format(framesInPath))
+      print("No folder {} in the specified resources folder, reverted to previous value".format(framesInPath))
     
     self.userSettings['FilePrefix'] = self.filePrefixInput.text()
     self.userSettings['FirstFrame'] = self.firstFrameSpinBox.value()
@@ -91,11 +93,11 @@ class SettingsGUI(qtw.QDialog):
     includeFramesIn = self.includeFramesInput.text()
     includeFramesArr = np.asarray(includeFramesIn.replace(' ', '').split(','))
     try:    
-      includeFramesArr.astype('uint8')
+      includeFramesArr.astype('uint16')
     except ValueError:
-      print("Invalid include frames input, reverted to default value")
+      print("Invalid include frames input, reverted to previous value")
     else:
-      self.userSettings['IncludeFrames'] = includeFramesArr.astype('uint8')
+      self.userSettings['IncludeFrames'] = includeFramesArr.astype('uint16')
 
     self.userSettings['RowSteps'] = self.rowStepsSpinBox.value()
 
@@ -145,7 +147,6 @@ class AppGUI(qtw.QDialog):
     self.KSizeSpinBox.setValue(self.userSettings['KSize'])
     self.checkpointCheckbox = self.findChild(qtw.QCheckBox, 'trainFromCheckpointCheckbox')
     self.checkpointCheckbox.setChecked(self.userSettings['TrainFromCheckpoint'])
-    self.outputFiedl = self.findChild(qtw.QTextBrowser, 'outputField')
     self.settingsButton = self.findChild(qtw.QPushButton, 'settingsButton')
     self.graphButton = self.findChild(qtw.QPushButton, 'showGraphButton')
     self.trainButton = self.findChild(qtw.QPushButton, 'trainButton')
