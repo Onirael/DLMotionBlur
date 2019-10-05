@@ -7,7 +7,8 @@ from functions import Training,\
                       MakeGenerators,\
                       UpdateGraphData,\
                       RenderImage,\
-                      ShowTrainingGraph
+                      ShowTrainingGraph,\
+                      GetFrameString
 from callbacks import MakeCallbacks
 import os, pickle, sys
 import numpy as np
@@ -37,8 +38,7 @@ class SettingsGUI(qtw.QDialog):
     self.inWeightsInput = self.findChild(qtw.QLineEdit, 'inWeightsInput')
     self.inWeightsInput.setText(settings['inWeightsSuffix'])
 
-    self.inWeightsCheckbox.toggled.connect(self.inWeightsInput.setEnabled)
-    self.inWeightsCheckbox.toggled.connect(self.inWeightsInput.setEnabled)
+    self.inWeightsCheckbox.toggled.connect(self.inWeightsInput.setDisabled)
 
     self.resourcesFolderInput = self.findChild(qtw.QLineEdit, 'resourcesFolderInput')
     self.resourcesFolderInput.setText(settings['ResourcesFolder'])
@@ -137,10 +137,24 @@ class AppGUI(qtw.QDialog):
         with open(self.saveFile, 'rb') as settingsFile:
             self.userSettings = pickle.load(settingsFile)
     #------------------------------------------------------------#
+    if not self.userSettings['TrainFromCheckpoint']:
+      graphFileNum = 0
+      while os.path.exists(self.userSettings['ResourcesFolder'] + '/Graphs/' + self.userSettings['ModelName'] + '_{}_GraphData.dat'\
+        .format(GetFrameString(graphFileNum, 2))):
+        graphFileNum += 12
+    else:
+      graphFileNum = 0
+      while os.path.exists(self.userSettings['ResourcesFolder'] + '/Graphs/' + self.userSettings['ModelName'] + '_{}_GraphData.dat'\
+        .format(GetFrameString(graphFileNum, 2))):
+        graphFileNum += 1
+      graphFileNum = min(graphFileNum - 1, 0)
 
-    self.graphFile = self.userSettings['ResourcesFolder'] + 'Graphs/' + self.userSettings['ModelName'] + '_GraphData.dat'
-    self.weightsFile = self.userSettings['ResourcesFolder'] + 'Weights/' + self.userSettings['ModelName'] + '_Weights.h5'
-      
+    self.graphFile = self.userSettings['ResourcesFolder'] + '/Graphs/' + self.userSettings['ModelName'] + '_{}_GraphData.dat'\
+      .format(GetFrameString(graphFileNum, 2))
+    if self.userSettings['inWeights']:
+      weightsName = self.userSettings['inWeightsSuffix']
+    self.weightsFile = self.userSettings['ResourcesFolder'] + 'Weights/' + self.userSettings['ModelName'] + weightsName + '.h5'
+       
     self.modelNameInput = self.findChild(qtw.QLineEdit, 'modelNameInput')
     self.modelNameInput.setText(self.userSettings['ModelName'])
     self.KSizeSpinBox = self.findChild(qtw.QSpinBox, 'KSizeSpinBox')
@@ -214,6 +228,8 @@ class AppGUI(qtw.QDialog):
     model = BuildModel(self.userSettings['KSize'], 
                 self.userSettings['ModelName'], 
                 self.userSettings['LearningRate'])
+    
+    model.load_weights(self.weightsFile)
 
     RenderImage(model, 
                 self.userSettings['ResourcesFolder'], 

@@ -12,6 +12,6 @@ def MakeCallbacks(graphFile, weightsFile, resourcesFolder, modelName, UpdateGrap
 
 	graphDataUpdate = SaveGraphCallback(graphFile, trainGenerator)
 	trainCheckpoint = ModelCheckpoint(weightsFile, verbose=0, save_weights_only=True)
-	backupCheckpoint = ModelCheckpoint(resourcesFolder + "Weights/" + modelName + "_{epoch:02d}" + "_Weights.h5", verbose=0, save_weights_only=True)
+	backupCheckpoint = ModelCheckpoint(resourcesFolder + "Backup_weights/" + modelName + "_{epoch:02d}" + "_Weights.h5", verbose=0, save_weights_only=True)
 
 	return [graphDataUpdate, trainCheckpoint, backupCheckpoint]

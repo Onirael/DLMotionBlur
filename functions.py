@@ -79,6 +79,7 @@ def RenderImage(model, resourcesFolder, dataShape, rowSteps) :
 
 
   finalImage = np.reshape(renderedImage, frameShape)
+  np.clip(finalImage, 0, 1)
 
   fig.add_subplot(2, 1, 1)
   plt.imshow(render_0FinalImage)
@@ -94,8 +95,8 @@ def RenderImage(model, resourcesFolder, dataShape, rowSteps) :
     imageio.imread('D:/Bachelor_resources/Capture1/Capture1_SceneColor_0839.png')[:,:,:3])
   maxLoss = np.amax(renderLoss)
 
-  plt.imshow((255 * renderLoss/maxLoss).astype('uint8'))
-  plt.show()
+  # plt.imshow((255 * renderLoss/maxLoss).astype('uint8'))
+  # plt.show()
   
   fileNumber = 0
   while (modelName + "_Render_{}.png".format(GetFrameString(fileNumber, 2))) in os.listdir(resourcesFolder + "Renders/"):
@@ -110,7 +111,7 @@ def RenderImage(model, resourcesFolder, dataShape, rowSteps) :
   print("Max loss : {}".format(maxLoss))
   
   with open(resourcesFolder + "Renders/renderLoss.txt", 'a+') as lossFile :
-    lossFile.write("\n\n{}: {}".format(modelName, maxLoss))
+    lossFile.write("\n\n{}_{}: {}".format(modelName, fileNumberString, maxLoss))
 
 
 def DebugSample(batchSize, stride, frameShape, setDescription, randomFrame, dataShape, filePrefix, digitFormat, workDirectory, shuffleSeed, sample=839) :
@@ -186,20 +187,20 @@ def UpdateGraphData(trainLoss, testLoss, trainSetSize, graphDataFile) :
   trainSetSize = [trainSetSize]
 
   if os.path.exists(graphDataFile) :
-    with open(graphDataFile, 'rb') as graphDataFile :
-      _training_loss, _test_loss, _epoch_count, _trainSetSize = pickle.load(graphDataFile)
+    with open(graphDataFile, 'rb') as graphFile :
+      _training_loss, _test_loss, _epoch_count, _trainSetSize = pickle.load(graphFile)
 
-    training_loss = _training_loss + training_loss
-    test_loss = _test_loss + test_loss
+    training_loss = _training_loss + [trainLoss]
+    test_loss = _test_loss + [testLoss]
     epoch_count = _epoch_count + 1
-    trainSetSize = _trainSetSize + trainSetSize
+    trainSetSize = _trainSetSize + [trainSetSize]
 
   else :
     training_loss = [trainLoss]
     test_loss = [testLoss]
 
-  with open(graphDataFile, 'wb') as graphDataFile :
-    pickle.dump((training_loss, test_loss, epoch_count, trainSetSize), graphDataFile)
+  with open(graphDataFile, 'wb+') as graphFile :
+    pickle.dump((training_loss, test_loss, epoch_count, trainSetSize), graphFile)
 
 
 def Training(model, trainEpochs, callbacks, trainGenerator, crossValidGenerator, 

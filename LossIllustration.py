@@ -4,9 +4,9 @@ from matplotlib import pyplot as plt
 from colour import Color as c
 
 os.chdir("C:/Bachelor_resources/")
-baseImage = imageio.imread("Capture1_Sorted/FinalImage/Capture1_FinalImage_0809.png")[:,:,:3]
-renderImage = imageio.imread("Renders/3Depth_K201_Render_0.png")[:,:,:3]
-baseColor = imageio.imread("Capture1_Sorted/SceneColor/Capture1_SceneColor_0809.png")[:,:,:3]
+baseImage = imageio.imread("Capture1_Sorted/FinalImage/Capture1_FinalImage_0809.png")[:,:,:3].astype('uint8')
+renderImage = imageio.imread("Renders/3Depth_K201_2_Render_00.png")[:,:,:3].astype('uint8')
+baseColor = imageio.imread("Capture1_Sorted/SceneColor/Capture1_SceneColor_0809.png")[:,:,:3].astype('uint8')
 
 def MapColor(value, gradient) :
     return gradient[value]
